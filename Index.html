@@ -1,1 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Team - Football Manager & Trading Engine</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
 
+    <!-- Global Loading Screen Overlay -->
+    <div id="loading-screen" class="loading-overlay active">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2 id="loading-title">Initializing Engine...</h2>
+            <p id="loading-subtext">Connecting to Firebase Realtime Database</p>
+        </div>
+    </div>
+
+    <!-- Global Notification Container (Toasts) -->
+    <div id="notification-container" class="toast-container"></div>
+
+    <!-- Authentication Container (Overlays game when unauthenticated) -->
+    <div id="auth-overlay" class="auth-modal-overlay">
+        <div class="auth-card">
+            <div class="auth-header">
+                <i class="fa-solid fa-shield-halved auth-logo"></i>
+                <h2>ULTIMATE CLUB</h2>
+                <p>Football Management & Trading Simulator</p>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form active">
+                <h3>Sign In</h3>
+                <div class="form-group">
+                    <label for="login-email">Email Address</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-envelope"></i>
+                        <input type="email" id="login-email" placeholder="name@domain.com" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="login-password" placeholder="••••••••" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                <div class="auth-links">
+                    <a href="#" id="link-to-register">Create an Account</a>
+                    <a href="#" id="link-to-forgot">Forgot Password?</a>
+                </div>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" class="auth-form">
+                <h3>Create Account</h3>
+                <div class="form-group">
+                    <label for="reg-username">Club Manager Name</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-user"></i>
+                        <input type="text" id="reg-username" placeholder="ManagerName" required maxlength="18">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="reg-email">Email Address</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-envelope"></i>
+                        <input type="email" id="reg-email" placeholder="name@domain.com" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">Password</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="password" id="reg-password" placeholder="••••••••" required minlength="6">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Register Club</button>
+                <div class="auth-links">
+                    <a href="#" id="link-to-login">Already have an account? Sign In</a>
+                </div>
+            </form>
+
+            <!-- Forgot Password Form -->
+            <form id="forgot-form" class="auth-form">
+                <h3>Reset Password</h3>
+                <p class="form-desc">Enter your email address to receive a password reset link.</p>
+                <div class="form-group">
+                    <label for="forgot-email">Email Address</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-envelope"></i>
+                        <input type="email" id="forgot-email" placeholder="name@domain.com" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Send Reset Link</button>
+                <div class="auth-links">
+                    <a href="#" id="forgot-to-login">Back to Sign In</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Navigation Bar -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <i class="fa-solid fa-trophy"></i>
+            <span class="brand-text">ULTIMATE<span class="highlight">FC</span></span>
+        </div>
+        <nav class="nav-links">
+            <button class="nav-btn active" data-screen="home-screen">
+                <i class="fa-solid fa-house"></i> <span>Home</span>
+            </button>
+            <button class="nav-btn" data-screen="squad-screen">
+                <i class="fa-solid fa-users-gear"></i> <span>Squad</span>
+            </button>
+            <button class="nav-btn" data-screen="club-screen">
+                <i class="fa-solid fa-box-archive"></i> <span>Club</span>
+            </button>
+            <button class="nav-btn" data-screen="store-screen">
+                <i class="fa-solid fa-store"></i> <span>Packs</span>
+            </button>
+            <button class="nav-btn" data-screen="market-screen">
+                <i class="fa-solid fa-chart-line"></i> <span>Market</span>
+            </button>
+            <button class="nav-btn" data-screen="play-screen">
+                <i class="fa-solid fa-gamepad"></i> <span>Play</span>
+            </button>
+            <button class="nav-btn" data-screen="stats-screen">
+                <i class="fa-solid fa-chart-pie"></i> <span>Stats</span>
+            </button>
+            <button class="nav-btn admin-only hidden" id="admin-nav-btn" data-screen="admin-screen">
+                <i class="fa-solid fa-user-shield"></i> <span>Admin</span>
+            </button>
+        </nav>
+        <div class="nav-user-info">
+            <div class="coin-badge">
+                <i class="fa-solid fa-coins coin-icon"></i>
+                <span id="user-coins-display">0</span>
+            </div>
+            <div class="user-profile-menu">
+                <span id="nav-username">Manager</span>
+                <button id="btn-logout" title="Sign Out" class="icon-btn">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- App Viewport Container -->
+    <main id="app-viewport">
+
+        <!-- 1. HOME SCREEN -->
+        <section id="home-screen" class="view-screen active">
+            <div class="dashboard-header">
+                <div class="user-welcome">
+                    <h1 id="welcome-username">Welcome, Manager</h1>
+                    <p>Rank: <span id="home-rank-badge" class="badge">Amateur</span> | Club Rating: <span id="home-rating-display">0</span></p>
+                </div>
+                <div class="quick-match-cta">
+                    <button class="btn btn-success btn-large" id="home-btn-play">
+                        <i class="fa-solid fa-play"></i> Play Match
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Live Banner -->
+            <div id="active-event-banner" class="event-banner hidden">
+                <div class="event-info">
+                    <span class="event-tag">LIVE EVENT</span>
+                    <h3 id="event-title">Double Walkout Odds Active!</h3>
+                    <p id="event-description">Special promo packs are now live in the store with reduced pricing.</p>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Squad Summary Card -->
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <h3><i class="fa-solid fa-shield"></i> Active Squad</h3>
+                        <button class="btn btn-secondary btn-sm" data-screen="squad-screen">Manage</button>
+                    </div>
+                    <div class="dash-card-body squad-preview">
+                        <div class="squad-stat-box">
+                            <span class="label">Overall</span>
+                            <span class="value" id="home-squad-overall">0</span>
+                        </div>
+                        <div class="squad-stat-box">
+                            <span class="label">Chemistry</span>
+                            <span class="value" id="home-squad-chemistry">0 / 33</span>
+                        </div>
+                        <div class="squad-stat-box">
+                            <span class="label">Formation</span>
+                            <span class="value" id="home-squad-formation">4-3-3</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Market Summary Card -->
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <h3><i class="fa-solid fa-chart-simple"></i> Transfer Market</h3>
+                        <button class="btn btn-secondary btn-sm" data-screen="market-screen">View Market</button>
+                    </div>
+                    <div class="dash-card-body">
+                        <div class="market-stat-row">
+                            <span>Active Listings:</span>
+                            <strong id="home-market-listings-count">0</strong>
+                        </div>
+                        <div class="market-stat-row">
+                            <span>Your Active Sales:</span>
+                            <strong id="home-user-sales-count">0 / 100</strong>
+                        </div>
+                        <div class="market-stat-row">
+                            <span>Market Index Status:</span>
+                            <strong id="home-market-trend" class="text-success">Stable</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pack Highlights -->
+                <div class="dash-card">
+                    <div class="dash-card-header">
+                        <h3><i class="fa-solid fa-box-open"></i> Featured Pack</h3>
+                        <button class="btn btn-secondary btn-sm" data-screen="store-screen">Store</button>
+                    </div>
+                    <div class="dash-card-body pack-featured-preview">
+                        <div class="featured-pack-art" id="home-featured-pack-art"></div>
+                        <div class="featured-pack-info">
+                            <h4 id="home-featured-pack-name">Ultimate Pack</h4>
+                            <p id="home-featured-pack-price">100,000 Coins</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. SQUAD BUILDER SCREEN -->
+        <section id="squad-screen" class="view-screen">
+            <div class="squad-builder-header">
+                <div class="squad-info-bar">
+                    <div class="stat-pill">Rating: <strong id="squad-overall-rating">0</strong></div>
+                    <div class="stat-pill">Chemistry: <strong id="squad-chemistry-rating">0</strong> / 33</div>
+                    <div class="stat-pill">ATT: <strong id="squad-att-rating">0</strong></div>
+                    <div class="stat-pill">MID: <strong id="squad-mid-rating">0</strong></div>
+                    <div class="stat-pill">DEF: <strong id="squad-def-rating">0</strong></div>
+                </div>
+                <div class="squad-controls">
+                    <label for="formation-select">Formation:</label>
+                    <select id="formation-select" class="form-control">
+                        <option value="4-3-3">4-3-3</option>
+                        <option value="4-4-2">4-4-2</option>
+                        <option value="4-2-3-1">4-2-3-1</option>
+                        <option value="3-5-2">3-5-2</option>
+                        <option value="5-3-2">5-3-2</option>
+                    </select>
+                    <button class="btn btn-danger btn-sm" id="btn-clear-squad"><i class="fa-solid fa-trash"></i> Clear XI</button>
+                </div>
+            </div>
+
+            <div class="squad-layout-container">
+                <!-- Football Pitch (Starting XI) -->
+                <div class="pitch-container" id="football-pitch">
+                    <!-- Dynamic XI Player Slots Rendered Here -->
+                </div>
+
+                <!-- Bench and Reserves Drawer -->
+                <div class="squad-bench-panel">
+                    <h3>Bench & Substitutes</h3>
+                    <div class="bench-slots-grid" id="bench-container">
+                        <!-- 7 Bench Slots -->
+                    </div>
+
+                    <h3 class="margin-top-md">Available Club Players</h3>
+                    <div class="squad-club-search">
+                        <input type="text" id="squad-search-input" placeholder="Search player name..." class="form-control">
+                        <select id="squad-filter-pos" class="form-control">
+                            <option value="ALL">All Pos</option>
+                            <option value="GK">GK</option>
+                            <option value="DEF">DEF</option>
+                            <option value="MID">MID</option>
+                            <option value="FWD">FWD</option>
+                        </select>
+                    </div>
+                    <div class="club-reserve-list" id="club-reserves-container">
+                        <!-- Filtered Club Cards for Quick Drag/Swap -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. CLUB INVENTORY SCREEN -->
+        <section id="club-screen" class="view-screen">
+            <div class="screen-header">
+                <h2>My Club Inventory</h2>
+                <div class="club-stats-summary">
+                    Total Players: <span id="club-total-count">0</span> | Total Club Value: <span id="club-total-value">0</span> Coins
+                </div>
+            </div>
+
+            <!-- Inventory Filters -->
+            <div class="filter-bar">
+                <input type="text" id="club-filter-name" placeholder="Search by name..." class="form-control">
+                <select id="club-filter-pos" class="form-control">
+                    <option value="ALL">All Positions</option>
+                    <option value="GK">GK</option>
+                    <option value="CB">CB</option>
+                    <option value="LB">LB</option>
+                    <option value="RB">RB</option>
+                    <option value="CM">CM</option>
+                    <option value="CAM">CAM</option>
+                    <option value="CDM">CDM</option>
+                    <option value="LW">LW</option>
+                    <option value="RW">RW</option>
+                    <option value="ST">ST</option>
+                </select>
+                <select id="club-filter-rarity" class="form-control">
+                    <option value="ALL">All Rarities</option>
+                    <option value="Bronze">Bronze</option>
+                    <option value="Silver">Silver</option>
+                    <option value="Gold">Gold</option>
+                    <option value="Special">Special</option>
+                </select>
+                <select id="club-sort-by" class="form-control">
+                    <option value="rating-desc">Rating: High to Low</option>
+                    <option value="rating-asc">Rating: Low to High</option>
+                    <option value="name-asc">Name: A to Z</option>
+                    <option value="price-desc">Value: High to Low</option>
+                </select>
+            </div>
+
+            <!-- Player Cards Grid -->
+            <div class="cards-grid" id="club-players-grid">
+                <!-- Dynamic Player Cards rendered here -->
+            </div>
+        </section>
+
+        <!-- 4. STORE / PACK OPENING SCREEN -->
+        <section id="store-screen" class="view-screen">
+            <div class="screen-header">
+                <h2>Pack Store</h2>
+                <p>Open packs to acquire elite football cards for your squad or trade on the market.</p>
+            </div>
+
+            <div class="packs-grid" id="store-packs-grid">
+                <!-- Packs rendered dynamically from database -->
+            </div>
+        </section>
+
+        <!-- 5. TRANSFER MARKET SCREEN -->
+        <section id="market-screen" class="view-screen">
+            <div class="screen-header">
+                <h2>Transfer Market</h2>
+                <p>Live AI & User Trading Exchange</p>
+            </div>
+
+            <!-- Market Search Bar -->
+            <div class="market-search-panel">
+                <div class="search-row">
+                    <div class="form-group">
+                        <label>Player Name</label>
+                        <input type="text" id="mkt-search-name" placeholder="e.g. Sterling" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Position</label>
+                        <select id="mkt-search-pos" class="form-control">
+                            <option value="ALL">Any Position</option>
+                            <option value="GK">GK</option>
+                            <option value="DEF">DEF</option>
+                            <option value="MID">MID</option>
+                            <option value="FWD">FWD</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Min Rating</label>
+                        <input type="number" id="mkt-search-min-rating" placeholder="45" min="45" max="99" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Rating</label>
+                        <input type="number" id="mkt-search-max-rating" placeholder="99" min="45" max="99" class="form-control">
+                    </div>
+                </div>
+                <div class="search-row">
+                    <div class="form-group">
+                        <label>Min Price</label>
+                        <input type="number" id="mkt-search-min-price" placeholder="200" min="0" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Price</label>
+                        <input type="number" id="mkt-search-max-price" placeholder="15,000,000" min="0" class="form-control">
+                    </div>
+                    <div class="form-group search-actions">
+                        <button class="btn btn-primary" id="btn-market-search"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+                        <button class="btn btn-secondary" id="btn-market-reset">Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Listings Results -->
+            <div class="market-results-header">
+                <h3>Live Listings (<span id="market-count-display">0</span>)</h3>
+                <div class="market-tax-notice"><i class="fa-solid fa-circle-info"></i> EA-Style Transfer Tax: <strong id="mkt-tax-rate-display">5%</strong></div>
+            </div>
+
+            <div class="cards-grid" id="market-listings-grid">
+                <!-- Active Market Listings rendered dynamically -->
+            </div>
+        </section>
+
+        <!-- 6. PLAY / MATCHMAKING SCREEN -->
+        <section id="play-screen" class="view-screen">
+            <div class="screen-header center-text">
+                <h2>Match Center</h2>
+                <p>Compete against real managers or AI clubs to earn points, coin rewards, and rank up.</p>
+            </div>
+
+            <div class="match-modes-grid">
+                <!-- Ranked Mode -->
+                <div class="mode-card">
+                    <div class="mode-icon"><i class="fa-solid fa-trophy text-gold"></i></div>
+                    <h3>Ranked Match</h3>
+                    <p>Compete for MMR points. Automatic promotion/relegation. Priority real user queue.</p>
+                    <button class="btn btn-primary btn-large" id="btn-start-ranked">Search Ranked</button>
+                </div>
+
+                <!-- Unranked Mode -->
+                <div class="mode-card">
+                    <div class="mode-icon"><i class="fa-solid fa-futbol text-blue"></i></div>
+                    <h3>Unranked Friendly</h3>
+                    <p>Test tactics and test squads without rank point consequences. Stats are tracked.</p>
+                    <button class="btn btn-secondary btn-large" id="btn-start-unranked">Search Unranked</button>
+                </div>
+
+                <!-- Friend Match Mode -->
+                <div class="mode-card">
+                    <div class="mode-icon"><i class="fa-solid fa-handshake"></i></div>
+                    <h3>Direct Friend Match</h3>
+                    <p>Instantly challenge one of the other 2 real registered users.</p>
+                    <select id="friend-select-user" class="form-control margin-bottom-sm">
+                        <option value="">Select Real Player...</option>
+                    </select>
+                    <button class="btn btn-success btn-large" id="btn-start-friend">Challenge</button>
+                </div>
+            </div>
+
+            <!-- Active Matchmaking Radar Overlay / Modal -->
+            <div id="matchmaking-modal" class="modal-overlay hidden">
+                <div class="modal-card center-text">
+                    <div class="radar-spinner"></div>
+                    <h2>Searching Opponent...</h2>
+                    <p id="mm-status-text">Searching for active real players (15s timeout)...</p>
+                    <div class="mm-timer" id="mm-timer-display">00:15</div>
+                    <button class="btn btn-danger" id="btn-cancel-mm">Cancel Search</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. LIVE MATCH SIMULATOR SCREEN -->
+        <section id="match-screen" class="view-screen">
+            <div class="match-scoreboard">
+                <div class="team-side home-side">
+                    <div class="team-logo-placeholder" id="match-home-logo"><i class="fa-solid fa-shield-halved"></i></div>
+                    <h3 id="match-home-name">Home Club</h3>
+                    <span class="team-rating-badge" id="match-home-rating">80</span>
+                </div>
+
+                <div class="score-center">
+                    <div class="match-time-badge" id="match-timer">00'</div>
+                    <div class="match-score"><span id="match-home-score">0</span> - <span id="match-away-score">0</span></div>
+                    <div class="match-status-tag" id="match-status-tag">1st Half</div>
+                </div>
+
+                <div class="team-side away-side">
+                    <div class="team-logo-placeholder" id="match-away-logo"><i class="fa-solid fa-shield-halved"></i></div>
+                    <h3 id="match-away-name">Away Club</h3>
+                    <span class="team-rating-badge" id="match-away-rating">78</span>
+                </div>
+            </div>
+
+            <!-- Live Momentum Bar -->
+            <div class="momentum-container">
+                <span class="lbl">Home Pressure</span>
+                <div class="momentum-bar">
+                    <div class="momentum-fill" id="momentum-fill" style="width: 50%;"></div>
+                </div>
+                <span class="lbl">Away Pressure</span>
+            </div>
+
+            <div class="match-body-grid">
+                <!-- Live Commentary Stream -->
+                <div class="commentary-panel">
+                    <h3><i class="fa-solid fa-microphone text-gold"></i> Live Match Commentary</h3>
+                    <div class="commentary-log" id="commentary-log">
+                        <!-- Minute events appended here -->
+                    </div>
+                </div>
+
+                <!-- Match Live Statistics -->
+                <div class="match-stats-panel">
+                    <h3>Match Statistics</h3>
+                    <div class="stat-comparison-row">
+                        <span id="stat-home-possession">50%</span>
+                        <span>Possession</span>
+                        <span id="stat-away-possession">50%</span>
+                    </div>
+                    <div class="stat-comparison-row">
+                        <span id="stat-home-shots">0</span>
+                        <span>Total Shots</span>
+                        <span id="stat-away-shots">0</span>
+                    </div>
+                    <div class="stat-comparison-row">
+                        <span id="stat-home-xg">0.00</span>
+                        <span>Expected Goals (xG)</span>
+                        <span id="stat-away-xg">0.00</span>
+                    </div>
+                    <div class="stat-comparison-row">
+                        <span id="stat-home-corners">0</span>
+                        <span>Corners</span>
+                        <span id="stat-away-corners">0</span>
+                    </div>
+                    <div class="stat-comparison-row">
+                        <span id="stat-home-cards">0</span>
+                        <span>Yellow Cards</span>
+                        <span id="stat-away-cards">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Penalty Kick Mini-Game Overlay -->
+            <div id="penalty-mini-game" class="modal-overlay hidden">
+                <div class="modal-card penalty-card center-text">
+                    <h2 class="text-gold"><i class="fa-solid fa-futbol"></i> PENALTY AWARDED!</h2>
+                    <p>Select your shot target direction:</p>
+                    <div class="penalty-goal-grid">
+                        <button class="penalty-target-btn" data-target="TL">Top Left</button>
+                        <button class="penalty-target-btn" data-target="TR">Top Right</button>
+                        <button class="penalty-target-btn target-center" data-target="C">Center</button>
+                        <button class="penalty-target-btn" data-target="BL">Bottom Left</button>
+                        <button class="penalty-target-btn" data-target="BR">Bottom Right</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Match Result Screen Modal -->
+            <div id="match-result-modal" class="modal-overlay hidden">
+                <div class="modal-card center-text">
+                    <h1 id="res-outcome-title">VICTORY!</h1>
+                    <div class="res-score-line" id="res-score-display">3 - 1</div>
+                    <div class="res-rewards-box">
+                        <div class="reward-row"><span>Coins Earned:</span> <strong id="res-coins-earned" class="text-gold">+500</strong></div>
+                        <div class="reward-row"><span>Rank Points Delta:</span> <strong id="res-rank-points" class="text-success">+25</strong></div>
+                    </div>
+                    <button class="btn btn-primary btn-large margin-top-md" id="btn-close-match-result">Return to Dashboard</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. USER STATISTICS SCREEN -->
+        <section id="stats-screen" class="view-screen">
+            <div class="screen-header">
+                <h2>Club Performance Statistics</h2>
+                <p>Lifetime tracking records, financial statement, and competitive history.</p>
+            </div>
+
+            <div class="stats-overview-grid">
+                <div class="stat-box-card">
+                    <div class="icon"><i class="fa-solid fa-trophy"></i></div>
+                    <div class="stat-val" id="st-record">0W - 0D - 0L</div>
+                    <div class="stat-lbl">Win / Draw / Loss Record</div>
+                </div>
+                <div class="stat-box-card">
+                    <div class="icon"><i class="fa-solid fa-coins"></i></div>
+                    <div class="stat-val" id="st-coins-earned">0</div>
+                    <div class="stat-lbl">Lifetime Coins Earned</div>
+                </div>
+                <div class="stat-box-card">
+                    <div class="icon"><i class="fa-solid fa-chart-line"></i></div>
+                    <div class="stat-val" id="st-transfer-profit">0</div>
+                    <div class="stat-lbl">Transfer Market Profit</div>
+                </div>
+                <div class="stat-box-card">
+                    <div class="icon"><i class="fa-solid fa-box-open"></i></div>
+                    <div class="stat-val" id="st-packs-opened">0</div>
+                    <div class="stat-lbl">Total Packs Opened</div>
+                </div>
+            </div>
+
+            <div class="stats-details-table margin-top-lg">
+                <h3>Detailed Career Metrics</h3>
+                <table class="data-table">
+                    <tbody>
+                        <tr><td>Goals Scored</td><td id="st-goals-scored">0</td></tr>
+                        <tr><td>Goals Conceded</td><td id="st-goals-conceded">0</td></tr>
+                        <tr><td>Biggest Victory</td><td id="st-biggest-win">N/A</td></tr>
+                        <tr><td>Longest Winning Streak</td><td id="st-win-streak">0 Games</td></tr>
+                        <tr><td>Cards Purchased on Market</td><td id="st-players-bought">0</td></tr>
+                        <tr><td>Cards Sold on Market</td><td id="st-players-sold">0</td></tr>
+                        <tr><td>Highest Single Card Sale</td><td id="st-highest-sale">0 Coins</td></tr>
+                        <tr><td>Best Pack Pull</td><td id="st-best-pull">None</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 9. ADMIN PANEL SCREEN (OWNER ONLY) -->
+        <section id="admin-screen" class="view-screen">
+            <div class="screen-header text-danger">
+                <h2><i class="fa-solid fa-user-shield"></i> Master Control Admin Panel</h2>
+                <p>System Architecture, Player Database Editor, Pack Creator, and AI Economy Controller.</p>
+            </div>
+
+            <div class="admin-tabs-nav">
+                <button class="admin-tab-btn active" data-tab="adm-players">Players Database</button>
+                <button class="admin-tab-btn" data-tab="adm-packs">Pack Studio</button>
+                <button class="admin-tab-btn" data-tab="adm-ai">AI Economy & Clubs</button>
+                <button class="admin-tab-btn" data-tab="adm-events">Live Events</button>
+            </div>
+
+            <!-- Tab 1: Player Database Editor -->
+            <div id="adm-players" class="admin-tab-content active">
+                <h3>Create New Player Definition</h3>
+                <form id="admin-create-player-form" class="admin-form-grid">
+                    <input type="text" id="adm-p-name" placeholder="Player Name" required class="form-control">
+                    <input type="number" id="adm-p-rating" placeholder="Overall (45-99)" min="45" max="99" required class="form-control">
+                    <select id="adm-p-pos" class="form-control" required>
+                        <option value="GK">GK</option>
+                        <option value="CB">CB</option>
+                        <option value="LB">LB</option>
+                        <option value="RB">RB</option>
+                        <option value="CM">CM</option>
+                        <option value="CAM">CAM</option>
+                        <option value="CDM">CDM</option>
+                        <option value="LW">LW</option>
+                        <option value="RW">RW</option>
+                        <option value="ST">ST</option>
+                    </select>
+                    <input type="text" id="adm-p-nation" placeholder="Nation" required class="form-control">
+                    <input type="text" id="adm-p-club" placeholder="Club Name" required class="form-control">
+                    <input type="text" id="adm-p-league" placeholder="League Name" required class="form-control">
+                    
+                    <!-- 6 Face Stats -->
+                    <input type="number" id="adm-p-pac" placeholder="Pace/Ref" min="1" max="99" class="form-control">
+                    <input type="number" id="adm-p-sho" placeholder="Shooting" min="1" max="99" class="form-control">
+                    <input type="number" id="adm-p-pas" placeholder="Passing" min="1" max="99" class="form-control">
+                    <input type="number" id="adm-p-dri" placeholder="Dribbling" min="1" max="99" class="form-control">
+                    <input type="number" id="adm-p-def" placeholder="Defending" min="1" max="99" class="form-control">
+                    <input type="number" id="adm-p-phy" placeholder="Physical" min="1" max="99" class="form-control">
+
+                    <button type="submit" class="btn btn-success btn-full span-all">Create Player Entry</button>
+                </form>
+
+                <h3 class="margin-top-lg">Database Master List</h3>
+                <div class="admin-player-table-wrapper">
+                    <table class="data-table" id="admin-player-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Name</th><th>Rating</th><th>Pos</th><th>Nation</th><th>Club</th><th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody><!-- Loaded dynamically --></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 2: Pack Creator Studio -->
+            <div id="adm-packs" class="admin-tab-content">
+                <h3>Pack Configuration</h3>
+                <form id="admin-create-pack-form" class="admin-form-grid">
+                    <input type="text" id="adm-pack-name" placeholder="Pack Title" required class="form-control">
+                    <input type="number" id="adm-pack-price" placeholder="Price in Coins" required class="form-control">
+                    <input type="number" id="adm-pack-cards" placeholder="Number of Cards" value="5" required class="form-control">
+                    <input type="number" id="adm-pack-min-rating" placeholder="Min Rating Guarantee" value="45" class="form-control">
+                    <select id="adm-pack-rarity" class="form-control">
+                        <option value="Bronze">Bronze Base</option>
+                        <option value="Silver">Silver Base</option>
+                        <option value="Gold">Gold Base</option>
+                        <option value="Special">Special Promo</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary span-all">Save Pack Entry</button>
+                </form>
+            </div>
+
+            <!-- Tab 3: AI Economy & Market Controller -->
+            <div id="adm-ai" class="admin-tab-content">
+                <h3>AI Simulation Settings</h3>
+                <div class="admin-form-grid">
+                    <div class="form-group">
+                        <label>Active AI Clubs (~2000 Target)</label>
+                        <input type="number" id="adm-ai-count" value="2000" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Market Action Speed (Seconds)</label>
+                        <input type="number" id="adm-ai-speed" value="3" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Transfer Tax %</label>
+                        <input type="number" id="adm-ai-tax" value="5" class="form-control">
+                    </div>
+                </div>
+                <div class="margin-top-md">
+                    <button class="btn btn-warning" id="btn-trigger-market-crash">Simulate Market Crash (-20%)</button>
+                    <button class="btn btn-success" id="btn-trigger-market-boom">Simulate Market Boom (+20%)</button>
+                </div>
+            </div>
+
+            <!-- Tab 4: Live Events Controller -->
+            <div id="adm-events" class="admin-tab-content">
+                <h3>Event Management</h3>
+                <button class="btn btn-primary" id="btn-toggle-double-walkouts">Toggle 2x Walkout Event</button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Global Pack Opening Reveal Overlay & Walkout Player Canvas -->
+    <div id="pack-opening-modal" class="modal-overlay pack-animation-modal hidden">
+        <div class="pack-reveal-stage" id="pack-reveal-stage">
+            <div class="pack-3d-box" id="pack-3d-box">
+                <div class="pack-front"></div>
+            </div>
+            
+            <!-- Walkout Spotlight & Player Display -->
+            <div class="walkout-container hidden" id="walkout-container">
+                <div class="walkout-light-beams"></div>
+                <div class="walkout-card-mount" id="walkout-card-mount"></div>
+                <h1 class="walkout-player-name" id="walkout-player-name">PLAYER NAME</h1>
+                <button class="btn btn-gold btn-large margin-top-lg" id="btn-skip-walkout">Continue to Pulls</button>
+            </div>
+
+            <!-- Opened Pack Summary Grid -->
+            <div class="opened-pack-summary hidden" id="opened-pack-summary">
+                <h2>Pack Contents</h2>
+                <div class="cards-grid" id="opened-cards-grid"></div>
+                <div class="pack-summary-actions">
+                    <button class="btn btn-success" id="btn-pack-send-all">Send All to Club</button>
+                    <button class="btn btn-danger" id="btn-pack-quicksell-all">Quick Sell Duplicate/All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals: Player Quick-Sell / List on Market Confirmation -->
+    <div id="player-action-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <button class="modal-close" id="btn-close-action-modal">&times;</button>
+            <div class="modal-card-body" id="player-action-modal-body">
+                <!-- Dynamically filled with selected Player Card & Controls -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Compat Imports -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <!-- Application Script Modules (Strict Modular Dependency Order) -->
+    <script src="firebase.js"></script>
+    <script src="utils.js"></script>
+    <script src="database.js"></script>
+    <script src="auth.js"></script>
+    <script src="players.js"></script>
+    <script src="club.js"></script>
+    <script src="squad.js"></script>
+    <script src="market.js"></script>
+    <script src="ai.js"></script>
+    <script src="matchmaking.js"></script>
+    <script src="match.js"></script>
+    <script src="store.js"></script>
+    <script src="admin.js"></script>
+    <script src="ui.js"></script>
+</body>
+</html>
