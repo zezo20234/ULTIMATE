@@ -3,7 +3,7 @@
    2-minute real-time matches, ball-only field, stat-based simulation
    ========================================================================== */
 
-import { getUserProfile, updateData } from './database.js';
+import { getUserProfile, updateData, updateMatchState, addMatchEvent, addMatchGoal, switchTurn, completeMatch, deleteMatchState, listenToMatchState } from './database.js';
 import { db } from './firebase.js';
 import { ref, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
@@ -129,6 +129,11 @@ export async function initializeMatch(matchType = 'unranked', opponent = null) {
 
         // Generate teams
         matchState.homeTeam = generateTeamFromSquad(startersWithPlayerData, userProfile.profile?.clubName || 'My Club');
+        
+        if (opponent && opponent.isRealTime) {
+            // Real-time multiplayer match
+            return initializeRealTimeMatch(opponent);
+        }
         
         if (opponent && opponent.opponentSquad) {
             // Real opponent - use their squad data
@@ -315,6 +320,242 @@ function resetMatchState() {
     matchState.isPaused = false;
     matchState.currentShooter = null;
     matchState.penaltyTeam = null;
+    matchState.isRealTime = false;
+    matchState.sharedMatchId = null;
+    matchState.playerNum = null;
+}
+
+/**
+ * Initialize real-time multiplayer match
+ */
+async function initializeRealTimeMatch(opponent) {
+    console.log('[Match Engine] Initializing real-time match:', opponent);
+    
+    const sharedMatchState = window.sharedMatchState;
+    const playerNum = window.currentPlayerNum;
+    
+    if (!sharedMatchState) {
+        console.error('[Match Engine] No shared match state found');
+        return false;
+    }
+    
+    // Set real-time flags
+    matchState.isRealTime = true;
+    matchState.sharedMatchId = opponent.matchId;
+    matchState.playerNum = playerNum;
+    
+    // Determine which team is home/away based on player number
+    const mySquad = playerNum === 'player1' ? sharedMatchState.player1.squad : sharedMatchState.player2.squad;
+    const opponentSquad = playerNum === 'player1' ? sharedMatchState.player2.squad : sharedMatchState.player1.squad;
+    
+    // Convert squad data to teams
+    const myStartersWithPlayerData = {};
+    Object.entries(mySquad.starters || {}).forEach(([key, starter]) => {
+        if (starter.name) {
+            myStartersWithPlayerData[key] = starter;
+        }
+    });
+    
+    const opponentStartersWithPlayerData = {};
+    Object.entries(opponentSquad.starters || {}).forEach(([key, starter]) => {
+        if (starter.name) {
+            opponentStartersWithPlayerData[key] = starter;
+        }
+    });
+    
+    matchState.homeTeam = generateTeamFromSquad(
+        myStartersWithPlayerData, 
+        window.userProfile?.profile?.clubName || 'My Club'
+    );
+    
+    matchState.awayTeam = generateTeamFromSquad(
+        opponentStartersWithPlayerData, 
+        playerNum === 'player1' ? sharedMatchState.player2.userId : sharedMatchState.player1.userId
+    );
+    
+    // Reset match state
+    resetMatchState();
+    
+    // Sync initial state from Firebase
+    matchState.homeScore = sharedMatchState.player1.score || 0;
+    matchState.awayScore = sharedMatchState.player2.score || 0;
+    matchState.currentMinute = sharedMatchState.currentMinute || 0;
+    
+    // Set up real-time listener
+    const unsubscribe = listenToMatchState(opponent.matchId, (updatedState) => {
+        console.log('[Match Engine] Match state updated:', updatedState);
+        
+        // Sync scores
+        matchState.homeScore = updatedState.player1.score || 0;
+        matchState.awayScore = updatedState.player2.score || 0;
+        matchState.currentMinute = updatedState.currentMinute || 0;
+        
+        // Process new events
+        if (updatedState.events && updatedState.events.length > (matchState.commentary.length || 0)) {
+            const newEvents = updatedState.events.slice(matchState.commentary.length || 0);
+            newEvents.forEach(event => {
+                matchState.commentary.push(event);
+                // Add commentary to display
+                addCommentaryToDisplay(event.description, event.type);
+            });
+        }
+        
+        // Check for new goals
+        if (updatedState.goals && updatedState.goals.length > (matchState.goals.length || 0)) {
+            const newGoals = updatedState.goals.slice(matchState.goals.length || 0);
+            newGoals.forEach(goal => {
+                matchState.goals.push(goal);
+                // Show goal celebration
+                showGoalCelebration(goal);
+            });
+        }
+        
+        // Update UI
+        updateScoreboard();
+        updateMatchTime();
+    });
+    
+    // Store unsubscribe function for cleanup
+    matchState.matchStateUnsubscribe = unsubscribe;
+    
+    // Show squad preview
+    showSquadPreview();
+    
+    // Wait for match to start (status becomes 'in_progress')
+    if (sharedMatchState.status === 'in_progress') {
+        startRealTimeGameLoop();
+    } else {
+        // Show waiting screen
+        showWaitingForMatchStart();
+    }
+    
+    return true;
+}
+
+/**
+ * Show waiting for match start screen
+ */
+function showWaitingForMatchStart() {
+    const matchScreen = document.getElementById('match-screen');
+    if (!matchScreen) return;
+    
+    const waitingHTML = `
+        <div class="waiting-screen" style="text-align: center; padding: 2rem;">
+            <h2>Waiting for Opponent to Ready Up...</h2>
+            <div class="loading-spinner" style="margin: 1rem auto;"></div>
+            <p class="text-muted">Match will start when both players are ready</p>
+        </div>
+    `;
+    
+    // Insert waiting screen before field
+    const field = matchScreen.querySelector('.match-field');
+    if (field) {
+        field.insertAdjacentHTML('beforebegin', waitingHTML);
+    }
+}
+
+/**
+ * Start real-time game loop
+ */
+function startRealTimeGameLoop() {
+    console.log('[Match Engine] Starting real-time game loop');
+    
+    // Remove waiting screen if exists
+    const waitingScreen = document.querySelector('.waiting-screen');
+    if (waitingScreen) {
+        waitingScreen.remove();
+    }
+    
+    // Reset match state
+    resetMatchState();
+    
+    // Start the match loop (simplified for now)
+    matchState.isRunning = true;
+    matchState.realStartTime = Date.now();
+    
+    // Start the clock
+    startMatchClock();
+    
+    // Start event generation (simplified)
+    startRealTimeEventGeneration();
+}
+
+/**
+ * Start real-time event generation
+ */
+function startRealTimeEventGeneration() {
+    // This will generate events and sync them to Firebase
+    // For now, use the existing event system but sync to Firebase
+    
+    matchState.eventInterval = setInterval(() => {
+        if (!matchState.isRunning || matchState.isPaused) return;
+        
+        // Only generate events if it's our turn
+        if (matchState.currentTurn === matchState.playerNum) {
+            generateMatchEvent();
+        }
+    }, 3000); // Check every 3 seconds
+}
+
+/**
+ * Generate match event and sync to Firebase
+ */
+function generateMatchEvent() {
+    // Generate a random event
+    const eventTypes = ['pass', 'shot', 'foul', 'corner'];
+    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+    
+    const event = {
+        type: eventType,
+        description: `${eventType.toUpperCase()} - Player action`,
+        minute: matchState.currentMinute,
+        player: matchState.playerNum
+    };
+    
+    // Sync to Firebase
+    if (matchState.sharedMatchId) {
+        addMatchEvent(matchState.sharedMatchId, event);
+    }
+    
+    // Also add to local state
+    matchState.commentary.push(event);
+    addCommentaryToDisplay(event.description, eventType);
+}
+
+/**
+ * Add commentary to display
+ */
+function addCommentaryToDisplay(text, type) {
+    const commentaryFeed = document.getElementById('commentary-feed');
+    if (!commentaryFeed) return;
+    
+    const item = document.createElement('div');
+    item.className = 'commentary-item';
+    item.innerHTML = `<span class="commentary-minute">${matchState.currentMinute}'</span> ${text}`;
+    
+    commentaryFeed.appendChild(item);
+    commentaryFeed.scrollTop = commentaryFeed.scrollHeight;
+}
+
+/**
+ * Show goal celebration
+ */
+function showGoalCelebration(goal) {
+    const goalOverlay = document.getElementById('goal-celebration');
+    if (!goalOverlay) return;
+    
+    goalOverlay.innerHTML = `
+        <div class="goal-celebration">
+            <h2>⚽ GOAL!</h2>
+            <p>${goal.description || 'Goal scored!'}</p>
+        </div>
+    `;
+    
+    goalOverlay.classList.remove('hidden');
+    
+    setTimeout(() => {
+        goalOverlay.classList.add('hidden');
+    }, 3000);
 }
 
 /**

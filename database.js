@@ -34,7 +34,8 @@ const PATHS = {
     SETTINGS: 'settings',
     STATS: 'statistics',
     STATIC: 'static',
-    ONLINE: 'online_users'
+    ONLINE: 'online_users',
+    MATCH_STATE: 'match_state' // New path for real-time match state
 };
 
 /* ==========================================================================
@@ -786,6 +787,214 @@ export function listenToOnlineStatus(callback) {
     });
     
     return unsubscribe;
+}
+
+/* ==========================================================================
+   REAL-TIME MATCH STATE MANAGEMENT
+   ========================================================================== */
+
+/**
+ * Create a new shared match state
+ * @param {string} matchId - Unique match identifier
+ * @param {string} player1Id - First player's user ID
+ * @param {string} player2Id - Second player's user ID
+ * @param {Object} player1Squad - First player's squad data
+ * @param {Object} player2Squad - Second player's squad data
+ * @param {string} matchType - Match type ('ranked', 'unranked', 'friend')
+ * @returns {Promise<void>}
+ */
+export async function createMatchState(matchId, player1Id, player2Id, player1Squad, player2Squad, matchType) {
+    const matchStateRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}`);
+    
+    const initialMatchState = {
+        matchId: matchId,
+        matchType: matchType,
+        status: 'waiting', // waiting, ready, in_progress, completed
+        createdAt: Date.now(),
+        
+        // Players
+        player1: {
+            userId: player1Id,
+            squad: player1Squad,
+            ready: false,
+            score: 0
+        },
+        player2: {
+            userId: player2Id,
+            squad: player2Squad,
+            ready: false,
+            score: 0
+        },
+        
+        // Game state
+        currentMinute: 0,
+        ballPosition: { x: 50, y: 50 }, // 0-100 coordinates
+        lastAction: null,
+        lastActionTime: null,
+        
+        // Events
+        events: [],
+        goals: [],
+        
+        // Turn management
+        currentTurn: null, // player1 or player2
+        turnExpiresAt: null
+    };
+    
+    await set(matchStateRef, initialMatchState);
+    console.log('[Database] Created match state:', matchId);
+}
+
+/**
+ * Set player as ready
+ * @param {string} matchId - Match identifier
+ * @param {string} playerNum - 'player1' or 'player2'
+ * @returns {Promise<void>}
+ */
+export async function setPlayerReady(matchId, playerNum) {
+    const readyRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/${playerNum}/ready`);
+    await set(readyRef, true);
+}
+
+/**
+ * Start the match (both players ready)
+ * @param {string} matchId - Match identifier
+ * @returns {Promise<void>}
+ */
+export async function startMatch(matchId) {
+    const statusRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/status`);
+    await set(statusRef, 'in_progress');
+    
+    // Set initial turn to player1
+    const turnRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/currentTurn`);
+    await set(turnRef, 'player1');
+}
+
+/**
+ * Update match state (ball position, etc.)
+ * @param {string} matchId - Match identifier
+ * @param {Object} updates - Object with fields to update
+ * @returns {Promise<void>}
+ */
+export async function updateMatchState(matchId, updates) {
+    const matchRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}`);
+    await update(matchRef, updates);
+}
+
+/**
+ * Add event to match
+ * @param {string} matchId - Match identifier
+ * @param {Object} event - Event object { type, description, minute, player, etc. }
+ * @returns {Promise<void>}
+ */
+export async function addMatchEvent(matchId, event) {
+    const eventsRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/events`);
+    const newEventRef = push(eventsRef);
+    await set(newEventRef, {
+        ...event,
+        timestamp: Date.now()
+    });
+}
+
+/**
+ * Add goal to match
+ * @param {string} matchId - Match identifier
+ * @param {string} scoringPlayer - 'player1' or 'player2'
+ * @param {Object} goalData - Goal details
+ * @returns {Promise<void>}
+ */
+export async function addMatchGoal(matchId, scoringPlayer, goalData) {
+    // Add to goals array
+    const goalsRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/goals`);
+    const newGoalRef = push(goalsRef);
+    await set(newGoalRef, {
+        ...goalData,
+        scoringPlayer: scoringPlayer,
+        timestamp: Date.now()
+    });
+    
+    // Update score
+    const scoreRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/${scoringPlayer}/score`);
+    await runTransaction(scoreRef, (currentScore) => {
+        return (currentScore || 0) + 1;
+    });
+}
+
+/**
+ * Switch turn to other player
+ * @param {string} matchId - Match identifier
+ * @param {string} currentPlayer - Current player ('player1' or 'player2')
+ * @returns {Promise<void>}
+ */
+export async function switchTurn(matchId, currentPlayer) {
+    const nextPlayer = currentPlayer === 'player1' ? 'player2' : 'player1';
+    const turnRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/currentTurn`);
+    await set(turnRef, nextPlayer);
+    
+    // Set turn expiration (30 seconds)
+    const turnExpiresRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/turnExpiresAt`);
+    await set(turnExpiresRef, Date.now() + 30000);
+}
+
+/**
+ * Listen to match state changes
+ * @param {string} matchId - Match identifier
+ * @param {Function} callback - Callback function with match state
+ * @returns {Function} Unsubscribe function
+ */
+export function listenToMatchState(matchId, callback) {
+    const matchRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}`);
+    
+    const unsubscribe = onValue(matchRef, (snapshot) => {
+        if (snapshot.exists()) {
+            callback(snapshot.val());
+        } else {
+            console.warn('[Database] Match state not found:', matchId);
+        }
+    });
+    
+    return unsubscribe;
+}
+
+/**
+ * Get current match state
+ * @param {string} matchId - Match identifier
+ * @returns {Promise<Object|null>} Current match state or null
+ */
+export async function getMatchState(matchId) {
+    const matchRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}`);
+    const snapshot = await get(matchRef);
+    
+    if (!snapshot.exists()) return null;
+    
+    return snapshot.val();
+}
+
+/**
+ * Complete match
+ * @param {string} matchId - Match identifier
+ * @param {string} winner - 'player1', 'player2', or 'draw'
+ * @returns {Promise<void>}
+ */
+export async function completeMatch(matchId, winner) {
+    const statusRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/status`);
+    await set(statusRef, 'completed');
+    
+    const winnerRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/winner`);
+    await set(winnerRef, winner);
+    
+    const completedAtRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}/completedAt`);
+    await set(completedAtRef, Date.now());
+}
+
+/**
+ * Delete match state (cleanup)
+ * @param {string} matchId - Match identifier
+ * @returns {Promise<void>}
+ */
+export async function deleteMatchState(matchId) {
+    const matchRef = ref(db, `${PATHS.MATCH_STATE}/${matchId}`);
+    await remove(matchRef);
 }
 
 /* ==========================================================================

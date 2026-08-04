@@ -14,7 +14,14 @@ import {
     updateUserLastSeen,
     getUserSquad,
     getUserClub,
-    getOnlineUsers
+    getOnlineUsers,
+    createMatchState,
+    setPlayerReady,
+    startMatch as startFirebaseMatch,
+    listenToMatchState,
+    switchTurn,
+    completeMatch,
+    deleteMatchState
 } from './database.js';
 import { initializeMatch } from './match.js';
 
@@ -36,7 +43,10 @@ let matchmakingState = {
     matchListener: null,
     currentUserId: null,
     queueId: null,
-    keepAliveInterval: null
+    keepAliveInterval: null,
+    currentMatchId: null,
+    matchStateListener: null,
+    playerNum: null // 'player1' or 'player2'
 };
 
 /**
@@ -271,6 +281,39 @@ function startOpponentSearch() {
                     starters: opponentSquadWithPlayers
                 };
 
+                // Get current user's squad data
+                const userSquad = window.userProfile?.squad;
+                const userClub = window.userProfile?.club;
+                const userSquadWithPlayers = {};
+                if (userSquad?.starters) {
+                    Object.entries(userSquad.starters).forEach(([key, starter]) => {
+                        const instanceId = starter.instanceId;
+                        if (instanceId && userClub && userClub[instanceId]) {
+                            userSquadWithPlayers[key] = userClub[instanceId];
+                        } else if (starter.name) {
+                            userSquadWithPlayers[key] = starter;
+                        }
+                    });
+                }
+                
+                const fullUserSquad = {
+                    ...userSquad,
+                    starters: userSquadWithPlayers
+                };
+
+                // Create shared match state
+                const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                matchmakingState.currentMatchId = matchId;
+                
+                await createMatchState(
+                    matchId,
+                    matchmakingState.currentUserId,
+                    randomOpponent.userId,
+                    fullUserSquad,
+                    fullOpponentSquad,
+                    matchmakingState.matchType
+                );
+
                 // Stop search timer
                 if (matchmakingState.searchTimer) {
                     clearInterval(matchmakingState.searchTimer);
@@ -286,14 +329,12 @@ function startOpponentSearch() {
                     clearInterval(matchmakingState.matchListener);
                 }
 
+                // Set current player as player1
+                matchmakingState.playerNum = 'player1';
+
                 // Start match
                 hideSearchingUI();
-                startMatchWithRealOpponent({
-                    id: `match_${Date.now()}`,
-                    opponentId: randomOpponent.userId,
-                    opponentName: randomOpponent.clubName || 'Opponent',
-                    opponentSquad: fullOpponentSquad
-                });
+                startRealTimeMatch(matchId, 'player1', randomOpponent.userId, randomOpponent.clubName || 'Opponent');
             }
         } catch (error) {
             console.error('[Matchmaking] Error searching for opponent:', error);
@@ -336,7 +377,123 @@ async function fallbackToAI() {
 }
 
 /**
- * Start match with AI
+ * Start real-time match with shared state
+ */
+function startRealTimeMatch(matchId, playerNum, opponentId, opponentName) {
+    console.log('[Matchmaking] Starting real-time match:', matchId, 'as', playerNum);
+    
+    // Show ready screen with waiting for opponent
+    showRealTimeReadyScreen(matchId, playerNum, opponentId, opponentName);
+    
+    // Set current player as ready
+    setPlayerReady(matchId, playerNum);
+    
+    // Listen to match state changes
+    matchmakingState.matchStateListener = listenToMatchState(matchId, (matchState) => {
+        console.log('[Matchmaking] Match state updated:', matchState);
+        
+        // Check if both players are ready
+        if (matchState.player1.ready && matchState.player2.ready && matchState.status === 'waiting') {
+            // Both ready, start the match
+            startFirebaseMatch(matchId);
+        }
+        
+        // If match is in progress, initialize the match engine
+        if (matchState.status === 'in_progress') {
+            // Initialize match with shared state
+            initializeRealTimeMatch(matchState);
+        }
+    });
+}
+
+/**
+ * Show real-time ready screen
+ */
+function showRealTimeReadyScreen(matchId, playerNum, opponentId, opponentName) {
+    const matchmakingScreen = document.getElementById('matchmaking-screen');
+    const readyContainer = document.getElementById('ready-screen-container');
+    const matchmakingOptions = document.getElementById('matchmaking-options');
+    
+    if (!matchmakingScreen || !readyContainer) return;
+    
+    // Hide matchmaking options, show ready container
+    if (matchmakingOptions) matchmakingOptions.classList.add('hidden');
+    readyContainer.classList.remove('hidden');
+    
+    readyContainer.innerHTML = `
+        <div class="ready-screen">
+            <h2>MATCH FOUND!</h2>
+            <div class="ready-squads">
+                <div class="ready-squad">
+                    <h3>${playerNum === 'player1' ? 'Your Squad' : 'Opponent Squad'}</h3>
+                    <div class="ready-players">
+                        <p class="text-muted">Waiting for opponent...</p>
+                    </div>
+                </div>
+                <div class="vs-divider">VS</div>
+                <div class="ready-squad">
+                    <h3>${opponentName}</h3>
+                    <div class="ready-players">
+                        <p class="text-muted">Waiting for opponent...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="ready-actions">
+                <button id="ready-btn" class="btn btn-primary btn-lg">READY</button>
+            </div>
+        </div>
+    `;
+    
+    const readyBtn = document.getElementById('ready-btn');
+    if (readyBtn) {
+        readyBtn.addEventListener('click', () => {
+            readyBtn.textContent = 'READY!';
+            readyBtn.disabled = true;
+            
+            // Set player as ready
+            setPlayerReady(matchId, playerNum);
+        });
+    }
+}
+
+/**
+ * Initialize real-time match with shared state
+ */
+function initializeRealTimeMatch(matchState) {
+    console.log('[Matchmaking] Initializing real-time match with state:', matchState);
+    
+    // Clear ready screen
+    const readyContainer = document.getElementById('ready-screen-container');
+    if (readyContainer) {
+        readyContainer.innerHTML = '';
+        readyContainer.classList.add('hidden');
+    }
+    
+    // Show matchmaking options again
+    const matchmakingOptions = document.getElementById('matchmaking-options');
+    if (matchmakingOptions) matchmakingOptions.classList.remove('hidden');
+    
+    // Switch to match screen
+    const screens = document.querySelectorAll('.app-screen');
+    screens.forEach(screen => screen.classList.add('hidden'));
+    document.getElementById('match-screen').classList.remove('hidden');
+    
+    // Store match state globally for match engine to use
+    window.sharedMatchState = matchState;
+    window.currentPlayerNum = matchmakingState.playerNum;
+    
+    // Initialize match engine
+    import('./match.js').then(module => {
+        module.initializeMatch(matchmakingState.matchType || 'unranked', {
+            isRealTime: true,
+            matchId: matchmakingState.currentMatchId,
+            playerNum: matchmakingState.playerNum
+        });
+    });
+}
+
+/**
+ * Start match with AI (fallback)
  */
 function startMatchWithAI(matchType) {
     console.log(`[Matchmaking] Starting ${matchType} match vs AI`);
