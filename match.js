@@ -70,6 +70,8 @@ let matchState = {
     matchInterval: null,
     eventInterval: null,
     isRanked: false,
+    isRealOpponent: false,
+    opponentId: null,
     isPaused: false, // For shot selection and penalties
     currentShooter: null,
     penaltyTeam: null
@@ -128,8 +130,22 @@ export async function initializeMatch(matchType = 'unranked', opponent = null) {
         // Generate teams
         matchState.homeTeam = generateTeamFromSquad(startersWithPlayerData, userProfile.profile?.clubName || 'My Club');
         
-        if (opponent) {
-            matchState.awayTeam = opponent;
+        if (opponent && opponent.opponentSquad) {
+            // Real opponent - use their squad data
+            const opponentStartersWithPlayerData = {};
+            Object.entries(opponent.opponentSquad.starters || {}).forEach(([key, starter]) => {
+                const instanceId = starter.instanceId;
+                if (instanceId && opponent.opponentSquad.starters[key]) {
+                    opponentStartersWithPlayerData[key] = opponent.opponentSquad.starters[key];
+                }
+            });
+            
+            matchState.awayTeam = generateTeamFromSquad(
+                opponentStartersWithPlayerData, 
+                opponent.opponentSquad.name || opponent.opponentSquad.formation || 'Opponent'
+            );
+            matchState.isRealOpponent = true;
+            matchState.opponentId = opponent.opponentId;
         } else {
             // Select AI team based on user's team rating for balanced difficulty
             const userRating = matchState.homeTeam.rating;
@@ -150,6 +166,8 @@ export async function initializeMatch(matchType = 'unranked', opponent = null) {
             }
             
             matchState.awayTeam = generateAITeam(aiTemplate);
+            matchState.isRealOpponent = false;
+            matchState.opponentId = null;
         }
 
         matchState.isRanked = matchType === 'ranked';

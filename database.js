@@ -33,7 +33,8 @@ const PATHS = {
     ACTIVE_MATCHES: 'active_matches',
     SETTINGS: 'settings',
     STATS: 'statistics',
-    STATIC: 'static'
+    STATIC: 'static',
+    ONLINE: 'online_users'
 };
 
 /* ==========================================================================
@@ -668,6 +669,108 @@ export async function readDataWithCache(path, ttl = 60000) {
 }
 
 /* ==========================================================================
+   ONLINE STATUS TRACKING
+   ========================================================================== */
+
+/**
+ * Set user as online
+ * @param {string} userId - User ID
+ * @returns {Promise<void>}
+ */
+export async function setUserOnline(userId) {
+    const onlineRef = ref(db, `${PATHS.ONLINE}/${userId}`);
+    await set(onlineRef, {
+        userId: userId,
+        lastSeen: Date.now(),
+        clubName: window.userProfile?.profile?.clubName || 'Unknown'
+    });
+}
+
+/**
+ * Set user as offline
+ * @param {string} userId - User ID
+ * @returns {Promise<void>}
+ */
+export async function setUserOffline(userId) {
+    await remove(ref(db, `${PATHS.ONLINE}/${userId}`));
+}
+
+/**
+ * Update user's last seen time (keep alive)
+ * @param {string} userId - User ID
+ * @returns {Promise<void>}
+ */
+export async function updateUserLastSeen(userId) {
+    const onlineRef = ref(db, `${PATHS.ONLINE}/${userId}/lastSeen`);
+    await set(onlineRef, Date.now());
+}
+
+/**
+ * Get all online users
+ * @returns {Promise<Array>} Array of online users
+ */
+export async function getOnlineUsers() {
+    const onlineRef = ref(db, PATHS.ONLINE);
+    const snapshot = await get(onlineRef);
+    
+    if (!snapshot.exists()) return [];
+    
+    const onlineUsers = snapshot.val();
+    return Object.entries(onlineUsers)
+        .map(([id, data]) => ({ id, ...data }));
+}
+
+/**
+ * Get user's squad data for multiplayer
+ * @param {string} userId - User ID
+ * @returns {Promise<Object|null>} Squad data or null
+ */
+export async function getUserSquad(userId) {
+    const userRef = ref(db, `${PATHS.USERS}/${userId}/squad`);
+    const snapshot = await get(userRef);
+    
+    if (!snapshot.exists()) return null;
+    
+    return snapshot.val();
+}
+
+/**
+ * Get user's club data for multiplayer
+ * @param {string} userId - User ID
+ * @returns {Promise<Object|null>} Club data or null
+ */
+export async function getUserClub(userId) {
+    const userRef = ref(db, `${PATHS.USERS}/${userId}/club`);
+    const snapshot = await get(userRef);
+    
+    if (!snapshot.exists()) return null;
+    
+    return snapshot.val();
+}
+
+/**
+ * Listen to online status changes
+ * @param {Function} callback - Callback function with online users array
+ * @returns {Function} Unsubscribe function
+ */
+export function listenToOnlineStatus(callback) {
+    const onlineRef = ref(db, PATHS.ONLINE);
+    
+    const unsubscribe = onValue(onlineRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const onlineUsers = snapshot.val();
+            const usersArray = Object.entries(onlineUsers)
+                .map(([id, data]) => ({ id, ...data }));
+            callback(usersArray);
+        } else {
+            callback([]);
+        }
+    });
+    
+    return unsubscribe;
+}
+
+/* ==========================================================================
    MATCHMAKING & MATCH DATABASE OPERATIONS
    ========================================================================== */
 
@@ -685,7 +788,9 @@ export async function joinMatchmakingQueue(userId, matchType, squadData) {
         matchType: matchType,
         timestamp: Date.now(),
         squadRating: squadData.rating || 75,
-        squadSize: squadData.playerCount || 0
+        squadSize: squadData.playerCount || 0,
+        waitingForFriend: squadData.waitingForFriend || false,
+        clubName: window.userProfile?.profile?.clubName || 'Unknown'
     };
     
     await set(ref(db, `${PATHS.MATCHMAKING_QUEUES}/${queueId}`), queueEntry);

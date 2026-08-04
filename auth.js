@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import { auth } from './firebase.js';
-import { createUserProfile } from './database.js';
+import { createUserProfile, setUserOnline, setUserOffline } from './database.js';
 import { 
     createUserWithEmailAndPassword, 
     signInWithEmailAndPassword, 
@@ -81,6 +81,10 @@ export async function registerUser(email, password, clubName) {
 export async function loginUser(email, password) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Set user as online
+        await setUserOnline(userCredential.user.uid);
+        
         return { success: true, user: userCredential.user, error: null };
     } catch (error) {
         console.error('[Auth API] Login Error:', error);
@@ -94,6 +98,10 @@ export async function loginUser(email, password) {
  */
 export async function logoutUser() {
     try {
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+            await setUserOffline(currentUser.uid);
+        }
         await signOut(auth);
         return { success: true, error: null };
     } catch (error) {
@@ -127,9 +135,11 @@ export async function resetPassword(email) {
  * @returns {Function} Unsubscribe function to detach the listener.
  */
 export function initAuthStateListener(onLogin, onLogout) {
-    return onAuthStateChanged(auth, (user) => {
+    return onAuthStateChanged(auth, async (user) => {
         if (user) {
             console.log(`[Auth API] Session active for: ${user.email} (${user.uid})`);
+            // Set user as online when session is restored
+            await setUserOnline(user.uid);
             if (typeof onLogin === 'function') onLogin(user);
         } else {
             console.log('[Auth API] No active session. User is logged out.');

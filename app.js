@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import { initAuthStateListener, logoutUser, loginUser, registerUser } from './auth.js';
-import { getUserProfile, listenToUserCoins, getStorePacks, initializePackStore } from './database.js';
+import { getUserProfile, listenToUserCoins, getStorePacks, initializePackStore, setUserOnline, setUserOffline } from './database.js';
 import { loadPlayerDatabase, renderPlayerCard, searchPlayers } from './players.js';
 import { buyAndOpenPack, playPackAnimation } from './packs.js';
 import { searchMarket, buyNow } from './market.js';
@@ -149,6 +149,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             setTimeout(() => loader.remove(), 500);
         }
     }, 3000);
+});
+
+// Handle window close/tab close - set user offline
+window.addEventListener('beforeunload', async () => {
+    if (currentUser) {
+        try {
+            await setUserOffline(currentUser.uid);
+        } catch (error) {
+            console.error('[App Controller] Error setting user offline on close:', error);
+        }
+    }
+});
+
+// Handle visibility change - manage online status
+document.addEventListener('visibilitychange', async () => {
+    if (currentUser) {
+        if (document.hidden) {
+            // Page hidden - user might be inactive
+            console.log('[App Controller] Page hidden, user inactive');
+        } else {
+            // Page visible again - ensure user is online
+            try {
+                await setUserOnline(currentUser.uid);
+                console.log('[App Controller] Page visible, user online');
+            } catch (error) {
+                console.error('[App Controller] Error setting user online on visibility change:', error);
+            }
+        }
+    }
 });
 
 /**
