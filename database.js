@@ -35,7 +35,8 @@ const PATHS = {
     STATS: 'statistics',
     STATIC: 'static',
     ONLINE: 'online_users',
-    MATCH_STATE: 'match_state' // New path for real-time match state
+    MATCH_STATE: 'match_state', // Real-time match state
+    LOBBIES: 'lobbies' // Friend match lobbies/rooms
 };
 
 /* ==========================================================================
@@ -998,6 +999,195 @@ export async function deleteMatchState(matchId) {
 }
 
 /* ==========================================================================
+   LOBBY SYSTEM FOR FRIEND MATCHES
+   ========================================================================== */
+
+/**
+ * Create a new lobby
+ * @param {string} hostId - Host user ID
+ * @param {string} hostName - Host club name
+ * @param {Object} hostSquad - Host squad data
+ * @returns {Promise<string>} Lobby ID
+ */
+export async function createLobby(hostId, hostName, hostSquad) {
+    const lobbyId = `lobby_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}`);
+    
+    const lobbyData = {
+        lobbyId: lobbyId,
+        hostId: hostId,
+        hostName: hostName,
+        hostSquad: hostSquad,
+        status: 'waiting', // waiting, full, in_progress, completed
+        createdAt: Date.now(),
+        maxPlayers: 2,
+        players: {
+            host: {
+                userId: hostId,
+                clubName: hostName,
+                squad: hostSquad,
+                ready: false
+            }
+        }
+    };
+    
+    await set(lobbyRef, lobbyData);
+    console.log('[Database] Created lobby:', lobbyId);
+    return lobbyId;
+}
+
+/**
+ * Join a lobby
+ * @param {string} lobbyId - Lobby ID
+ * @param {string} player2Id - Second player ID
+ * @param {string} player2Name - Second player club name
+ * @param {Object} player2Squad - Second player squad data
+ * @returns {Promise<boolean>} Success or failure
+ */
+export async function joinLobby(lobbyId, player2Id, player2Name, player2Squad) {
+    const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}`);
+    const snapshot = await get(lobbyRef);
+    
+    if (!snapshot.exists()) {
+        console.error('[Database] Lobby not found:', lobbyId);
+        return false;
+    }
+    
+    const lobby = snapshot.val();
+    
+    if (lobby.status !== 'waiting') {
+        console.error('[Database] Lobby not accepting players:', lobby.status);
+        return false;
+    }
+    
+    if (Object.keys(lobby.players).length >= lobby.maxPlayers) {
+        console.error('[Database] Lobby is full');
+        return false;
+    }
+    
+    // Add player to lobby
+    await update(lobbyRef, {
+        [`players/player2`]: {
+            userId: player2Id,
+            clubName: player2Name,
+            squad: player2Squad,
+            ready: false
+        },
+        status: 'full'
+    });
+    
+    console.log('[Database] Player joined lobby:', lobbyId);
+    return true;
+}
+
+/**
+ * Set player as ready in lobby
+ * @param {string} lobbyId - Lobby ID
+ * @param {string} playerNum - 'host' or 'player2'
+ * @returns {Promise<void>}
+ */
+export async function setLobbyPlayerReady(lobbyId, playerNum) {
+    const readyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}/players/${playerNum}/ready`);
+    await set(readyRef, true);
+}
+
+/**
+ * Get lobby data
+ * @param {string} lobbyId - Lobby ID
+ * @returns {Promise<Object|null>} Lobby data or null
+ */
+export async function getLobby(lobbyId) {
+    const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}`);
+    const snapshot = await get(lobbyRef);
+    
+    if (!snapshot.exists()) return null;
+    
+    return snapshot.val();
+}
+
+/**
+ * Listen to lobby changes
+ * @param {string} lobbyId - Lobby ID
+ * @param {Function} callback - Callback function with lobby data
+ * @returns {Function} Unsubscribe function
+ */
+export function listenToLobby(lobbyId, callback) {
+    const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}`);
+    
+    const unsubscribe = onValue(lobbyRef, (snapshot) => {
+        if (snapshot.exists()) {
+            callback(snapshot.val());
+        } else {
+            console.warn('[Database] Lobby not found:', lobbyId);
+        }
+    });
+    
+    return unsubscribe;
+}
+
+/**
+ * Get all available lobbies
+ * @returns {Promise<Array>} Array of available lobbies
+ */
+export async function getAvailableLobbies() {
+    const lobbiesRef = ref(db, PATHS.LOBBIES);
+    const snapshot = await get(lobbiesRef);
+    
+    if (!snapshot.exists()) return [];
+    
+    const lobbies = snapshot.val();
+    return Object.entries(lobbies)
+        .filter(([id, data]) => data.status === 'waiting')
+        .map(([id, data]) => ({ id, ...data }));
+}
+
+/**
+ * Delete lobby
+ * @param {string} lobbyId - Lobby ID
+ * @returns {Promise<void>}
+ */
+export async function deleteLobby(lobbyId) {
+    const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}`);
+    await remove(lobbyRef);
+}
+
+/**
+ * Set queue entry status
+ * @param {string} queueId - Queue entry ID
+ * @param {string} status - New status
+ * @param {string} matchId - Match ID (if matched)
+ * @returns {Promise<void>}
+ */
+export async function setQueueStatus(queueId, status, matchId = null) {
+    const queueRef = ref(db, `${PATHS.MATCHMAKING_QUEUES}/${queueId}`);
+    const updates = { status: status };
+    if (matchId) {
+        updates.matchId = matchId;
+    }
+    await update(queueRef, updates);
+}
+
+/**
+ * Listen to queue entry changes
+ * @param {string} queueId - Queue entry ID
+ * @param {Function} callback - Callback function with queue data
+ * @returns {Function} Unsubscribe function
+ */
+export function listenToQueueEntry(queueId, callback) {
+    const queueRef = ref(db, `${PATHS.MATCHMAKING_QUEUES}/${queueId}`);
+    
+    const unsubscribe = onValue(queueRef, (snapshot) => {
+        if (snapshot.exists()) {
+            callback(snapshot.val());
+        } else {
+            console.warn('[Database] Queue entry not found:', queueId);
+        }
+    });
+    
+    return unsubscribe;
+}
+
+/* ==========================================================================
    MATCHMAKING & MATCH DATABASE OPERATIONS
    ========================================================================== */
 
@@ -1017,7 +1207,8 @@ export async function joinMatchmakingQueue(userId, matchType, squadData) {
         squadRating: squadData.rating || 75,
         squadSize: squadData.playerCount || 0,
         waitingForFriend: squadData.waitingForFriend || false,
-        clubName: window.userProfile?.profile?.clubName || 'Unknown'
+        clubName: window.userProfile?.profile?.clubName || 'Unknown',
+        status: 'searching' // searching, matched, ready
     };
     
     await set(ref(db, `${PATHS.MATCHMAKING_QUEUES}/${queueId}`), queueEntry);

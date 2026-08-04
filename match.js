@@ -490,36 +490,72 @@ function startRealTimeEventGeneration() {
     matchState.eventInterval = setInterval(() => {
         if (!matchState.isRunning || matchState.isPaused) return;
         
-        // Only generate events if it's our turn
-        if (matchState.currentTurn === matchState.playerNum) {
-            generateMatchEvent();
+        // Only generate events if it's our turn (or if we're home team for simplicity)
+        if (matchState.playerNum === 'player1') {
+            generateRandomMatchEvent();
         }
     }, 3000); // Check every 3 seconds
 }
 
 /**
- * Generate match event and sync to Firebase
+ * Generate random match event and sync to Firebase
  */
-function generateMatchEvent() {
-    // Generate a random event
-    const eventTypes = ['pass', 'shot', 'foul', 'corner'];
-    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+function generateRandomMatchEvent() {
+    // Use existing match engine logic to generate events
+    const minute = Math.floor(matchState.currentTime / (MATCH_CONFIG.REAL_DURATION / MATCH_CONFIG.GAME_DURATION));
     
+    // Generate event based on probabilities
+    const rand = Math.random();
+    let eventType;
+    
+    if (rand < 0.05) {
+        eventType = 'goal';
+    } else if (rand < 0.15) {
+        eventType = 'shot';
+    } else if (rand < 0.25) {
+        eventType = 'foul';
+    } else if (rand < 0.30) {
+        eventType = 'corner';
+    } else {
+        eventType = 'pass';
+    }
+    
+    // Generate event description
+    const team = Math.random() > 0.5 ? 'home' : 'away';
     const event = {
         type: eventType,
-        description: `${eventType.toUpperCase()} - Player action`,
-        minute: matchState.currentMinute,
-        player: matchState.playerNum
+        description: `${eventType.toUpperCase()} - ${team === 'home' ? matchState.homeTeam.name : matchState.awayTeam.name}`,
+        minute: minute,
+        team: team
     };
     
     // Sync to Firebase
     if (matchState.sharedMatchId) {
         addMatchEvent(matchState.sharedMatchId, event);
+        
+        // If it's a goal, sync that too
+        if (eventType === 'goal') {
+            const scoringPlayer = team === 'home' ? 'player1' : 'player2';
+            addMatchGoal(matchState.sharedMatchId, scoringPlayer, {
+                description: `Goal by ${team === 'home' ? matchState.homeTeam.name : matchState.awayTeam.name}!`,
+                minute: minute
+            });
+        }
     }
     
     // Also add to local state
     matchState.commentary.push(event);
     addCommentaryToDisplay(event.description, eventType);
+    
+    // Update local score if goal
+    if (eventType === 'goal') {
+        if (team === 'home') {
+            matchState.homeScore++;
+        } else {
+            matchState.awayScore++;
+        }
+        updateScoreboard();
+    }
 }
 
 /**
