@@ -46,6 +46,16 @@ const clubNameDisplays = document.querySelectorAll('.user-club-name');
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[App Controller] Initializing Ultimate Team Application...');
     
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+        try {
+            await navigator.serviceWorker.register('./service-worker.js');
+            console.log('[App Controller] Service Worker registered');
+        } catch (error) {
+            console.log('[App Controller] Service Worker registration failed:', error);
+        }
+    }
+    
     // 1. Preload the master player database from Firebase or local cache
     const loaded = await loadPlayerDatabase();
     if (!loaded) {

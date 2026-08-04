@@ -1,0 +1,23 @@
+{
+  "name": "Ultimate Team",
+  "short_name": "Ultimate Team",
+  "description": "Build your dream squad, open packs, and dominate the market",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "orientation": "portrait",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/5900/5900544.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/5900/5900544.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
