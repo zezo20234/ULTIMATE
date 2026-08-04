@@ -2,780 +2,967 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Team - Football Manager & Trading Engine</title>
-    <!-- Google Fonts -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0b0e14">
+    <meta name="description" content="Ultimate Team - Build your dream squad, open premium packs, and dominate the market.">
+    <title>Ultimate Team | Web App</title>
+
+    <!-- Google Fonts: Inter for UI, Oswald for Player Cards -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- Font Awesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Pro Icons (Free CDN fallback) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="style.css">
+    
+    <!-- Premium Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body class="dark-theme">
+<body>
 
-    <!-- Global Loading Screen Overlay -->
-    <div id="loading-screen" class="loading-overlay active">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <h2 id="loading-title">Initializing Engine...</h2>
-            <p id="loading-subtext">Connecting to Firebase Realtime Database</p>
+    <!-- ==========================================================================
+       INITIAL APP LOADER
+       ========================================================================== -->
+    <div id="initial-loader" class="full-screen-overlay" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0b0e14; position: fixed; inset: 0; z-index: 9999; transition: opacity 0.5s;">
+        <i class="fa-solid fa-futbol fa-spin" style="font-size: 3rem; color: #f3c653; margin-bottom: 1rem;"></i>
+        <h2 style="color: white; font-weight: 800; letter-spacing: 2px;">ZA SPORTS</h2>
+        <p style="color: #8b949e; margin-bottom: 1rem;" id="loading-status">Initializing Web App Engine...</p>
+        <div class="loading-bar-container">
+            <div class="loading-bar" id="loading-bar"></div>
         </div>
+        <p style="color: #8b949e; font-size: 0.85rem; margin-top: 0.5rem;" id="loading-percent">0%</p>
     </div>
 
-    <!-- Global Notification Container (Toasts) -->
-    <div id="notification-container" class="toast-container"></div>
-
-    <!-- Authentication Container (Overlays game when unauthenticated) -->
-    <div id="auth-overlay" class="auth-modal-overlay">
-        <div class="auth-card">
-            <div class="auth-header">
-                <i class="fa-solid fa-shield-halved auth-logo"></i>
-                <h2>ULTIMATE CLUB</h2>
-                <p>Football Management & Trading Simulator</p>
-            </div>
-            
-            <!-- Login Form -->
-            <form id="login-form" class="auth-form active">
-                <h3>Sign In</h3>
-                <div class="form-group">
-                    <label for="login-email">Email Address</label>
-                    <div class="input-wrapper">
-                        <i class="fa-solid fa-envelope"></i>
-                        <input type="email" id="login-email" placeholder="name@domain.com" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="login-password">Password</label>
-                    <div class="input-wrapper">
-                        <i class="fa-solid fa-lock"></i>
-                        <input type="password" id="login-password" placeholder="••••••••" required>
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary btn-full">Sign In</button>
-                <div class="auth-links">
-                    <a href="#" id="link-to-register">Create an Account</a>
-                    <a href="#" id="link-to-forgot">Forgot Password?</a>
-                </div>
-            </form>
-
-            <!-- Register Form -->
-            <form id="register-form" class="auth-form">
-                <h3>Create Account</h3>
-                <div class="form-group">
-                    <label for="reg-username">Club Manager Name</label>
-                    <div class="input-wrapper">
-                        <i class="fa-solid fa-user"></i>
-                        <input type="text" id="reg-username" placeholder="ManagerName" required maxlength="18">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="reg-email">Email Address</label>
-                    <div class="input-wrapper">
-                        <i class="fa-solid fa-envelope"></i>
-                        <input type="email" id="reg-email" placeholder="name@domain.com" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="reg-password">Password</label>
-                    <div class="input-wrapper">
-                        <i class="fa-solid fa-lock"></i>
-                        <input type="password" id="reg-password" placeholder="••••••••" required minlength="6">
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary btn-full">Register Club</button>
-                <div class="auth-links">
-                    <a href="#" id="link-to-login">Already have an account? Sign In</a>
-                </div>
-            </form>
-
-            <!-- Forgot Password Form -->
-            <form id="forgot-form" class="auth-form">
-                <h3>Reset Password</h3>
-                <p class="form-desc">Enter your email address to receive a password reset link.</p>
-                <div class="form-group">
-                    <label for="forgot-email">Email Address</label>
-                    <div class="input-wrapper">
-                        <i class="fa-solid fa-envelope"></i>
-                        <input type="email" id="forgot-email" placeholder="name@domain.com" required>
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary btn-full">Send Reset Link</button>
-                <div class="auth-links">
-                    <a href="#" id="forgot-to-login">Back to Sign In</a>
-                </div>
-            </form>
+    <!-- ==========================================================================
+       GLOBAL APP HEADER (Visible when authenticated)
+       ========================================================================== -->
+    <header id="app-header" class="hidden">
+        <div class="brand-logo">
+            <i class="fa-solid fa-shield-halved"></i> ULTIMATE TEAM
         </div>
-    </div>
-
-    <!-- Main Navigation Bar -->
-    <header class="navbar">
-        <div class="nav-brand">
-            <i class="fa-solid fa-trophy"></i>
-            <span class="brand-text">ULTIMATE<span class="highlight">FC</span></span>
-        </div>
-        <nav class="nav-links">
-            <button class="nav-btn active" data-screen="home-screen">
-                <i class="fa-solid fa-house"></i> <span>Home</span>
-            </button>
-            <button class="nav-btn" data-screen="squad-screen">
-                <i class="fa-solid fa-users-gear"></i> <span>Squad</span>
-            </button>
-            <button class="nav-btn" data-screen="club-screen">
-                <i class="fa-solid fa-box-archive"></i> <span>Club</span>
-            </button>
-            <button class="nav-btn" data-screen="store-screen">
-                <i class="fa-solid fa-store"></i> <span>Packs</span>
-            </button>
-            <button class="nav-btn" data-screen="market-screen">
-                <i class="fa-solid fa-chart-line"></i> <span>Market</span>
-            </button>
-            <button class="nav-btn" data-screen="play-screen">
-                <i class="fa-solid fa-gamepad"></i> <span>Play</span>
-            </button>
-            <button class="nav-btn" data-screen="stats-screen">
-                <i class="fa-solid fa-chart-pie"></i> <span>Stats</span>
-            </button>
-            <button class="nav-btn admin-only hidden" id="admin-nav-btn" data-screen="admin-screen">
-                <i class="fa-solid fa-user-shield"></i> <span>Admin</span>
-            </button>
+        
+        <nav class="app-nav-links">
+            <button class="nav-btn active" data-target-screen="dashboard"><i class="fa-solid fa-house"></i> Home</button>
+            <button class="nav-btn" data-target-screen="store"><i class="fa-solid fa-store"></i> Store</button>
+            <button class="nav-btn" data-target-screen="market"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfers</button>
+            <button class="nav-btn" data-target-screen="club"><i class="fa-solid fa-users"></i> Club</button>
+            <button class="nav-btn" data-target-screen="squad"><i class="fa-solid fa-people-group"></i> Squad</button>
+            <button class="nav-btn" data-target-screen="matchmaking"><i class="fa-solid fa-futbol"></i> Play</button>
+            <button class="nav-btn" data-target-screen="admin"><i class="fa-solid fa-cog"></i> Admin</button>
         </nav>
-        <div class="nav-user-info">
-            <div class="coin-badge">
-                <i class="fa-solid fa-coins coin-icon"></i>
-                <span id="user-coins-display">0</span>
+
+        <div class="user-hud">
+            <div class="hud-item badge">
+                <i class="fa-solid fa-shield"></i> <span class="user-club-name">Loading...</span>
             </div>
-            <div class="user-profile-menu">
-                <span id="nav-username">Manager</span>
-                <button id="btn-logout" title="Sign Out" class="icon-btn">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                </button>
+            <div class="hud-item coins">
+                <i class="fa-solid fa-coins gold-text"></i> <span class="user-coin-balance">0</span>
             </div>
+            <button class="btn btn-outline logout-btn" title="Logout">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
         </div>
     </header>
 
-    <!-- App Viewport Container -->
-    <main id="app-viewport">
+    <!-- ==========================================================================
+       SCREEN 1: AUTHENTICATION
+       ========================================================================== -->
+    <main id="auth-screen" class="app-screen">
+        <div class="auth-wrapper">
+            <div class="auth-hero">
+                <h1>Build Your Dream Squad.</h1>
+                <p>Trade, open packs, and compete in the ultimate football ecosystem.</p>
+            </div>
+            <div class="auth-card">
+                <h2><i class="fa-solid fa-user-lock" style="color: var(--fc-neon);"></i> Manager Portal</h2>
+                
+                <!-- Login Form -->
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-email">Email Address</label>
+                        <div class="input-icon-wrap">
+                            <i class="fa-solid fa-envelope"></i>
+                            <input type="email" id="login-email" required placeholder="manager@fut.com" autocomplete="email">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <div class="input-icon-wrap">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-large">
+                        <i class="fa-solid fa-right-to-bracket"></i> Secure Login
+                    </button>
+                </form>
 
-        <!-- 1. HOME SCREEN -->
-        <section id="home-screen" class="view-screen active">
-            <div class="dashboard-header">
-                <div class="user-welcome">
-                    <h1 id="welcome-username">Welcome, Manager</h1>
-                    <p>Rank: <span id="home-rank-badge" class="badge">Amateur</span> | Club Rating: <span id="home-rating-display">0</span></p>
+                <!-- Register Form (Hidden by default) -->
+                <form id="register-form" class="hidden">
+                    <div class="form-group">
+                        <label for="reg-clubname">Club Name</label>
+                        <div class="input-icon-wrap">
+                            <i class="fa-solid fa-shield"></i>
+                            <input type="text" id="reg-clubname" required placeholder="e.g. FC Legends" maxlength="15">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-email">Email Address</label>
+                        <div class="input-icon-wrap">
+                            <i class="fa-solid fa-envelope"></i>
+                            <input type="email" id="reg-email" required placeholder="manager@fut.com" autocomplete="email">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-password">Password</label>
+                        <div class="input-icon-wrap">
+                            <i class="fa-solid fa-lock"></i>
+                            <input type="password" id="reg-password" required placeholder="Minimum 6 characters" minlength="6" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-large">
+                        <i class="fa-solid fa-user-plus"></i> Establish Club
+                    </button>
+                </form>
+
+                <div class="auth-divider"><span>OR</span></div>
+                
+                <button type="button" id="toggle-auth-mode" class="btn btn-secondary" style="width: 100%;">
+                    Create New Club Instead
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       SCREEN 2: DASHBOARD (Home)
+       ========================================================================== -->
+    <main id="dashboard-screen" class="app-screen hidden">
+        <section class="dashboard-header">
+            <div>
+                <h1 class="welcome-text">Welcome Back, <span class="user-club-name text-gold">Manager</span></h1>
+                <p class="text-muted">Season 1 is active. Daily objectives reset in 12 hours.</p>
+            </div>
+        </section>
+        
+        <div class="dashboard-grid">
+            <div class="dash-card store-promo" data-target-screen="store">
+                <div class="card-content">
+                    <h3><i class="fa-solid fa-bolt"></i> Promo Packs Available</h3>
+                    <p>New Team of the Week cards are in packs now. Test your luck!</p>
+                    <button class="btn btn-primary">Go to Store</button>
                 </div>
-                <div class="quick-match-cta">
-                    <button class="btn btn-success btn-large" id="home-btn-play">
-                        <i class="fa-solid fa-play"></i> Play Match
+                <div class="card-bg-overlay"></div>
+            </div>
+
+            <div class="dash-card market-promo" data-target-screen="market">
+                <div class="card-content">
+                    <h3><i class="fa-solid fa-chart-line"></i> Transfer Market</h3>
+                    <p>Snipe deals, bid on elite players, and build your trading empire.</p>
+                    <button class="btn btn-secondary">Search Market</button>
+                </div>
+            </div>
+
+            <div class="dash-card club-promo" data-target-screen="squad">
+                <div class="card-content">
+                    <h3><i class="fa-solid fa-chess-board"></i> Manage Squad</h3>
+                    <p>Optimize chemistry and set up your tactics for the next match.</p>
+                    <button class="btn btn-secondary">Squad Builder</button>
+                </div>
+            </div>
+
+            <div class="dash-card play-promo" data-target-screen="matchmaking">
+                <div class="card-content">
+                    <h3><i class="fa-solid fa-futbol"></i> Play Match</h3>
+                    <p>Compete in Ranked, Unranked, or Friend matches against real players or AI.</p>
+                    <button class="btn btn-primary">Find Match</button>
+                </div>
+                <div class="card-bg-overlay"></div>
+            </div>
+
+        </div>
+
+        <!-- Recent Activity Section -->
+        <section style="margin-top: 3rem;">
+            <h2 style="font-family: 'Oswald', sans-serif; margin-bottom: 1.5rem; color: var(--fc-neon);">RECENT ACTIVITY</h2>
+            <div id="recent-activity" class="activity-list">
+                <!-- Activity items will be populated dynamically -->
+                <div class="text-muted">No recent activity to display.</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==========================================================================
+       SCREEN 3: PACK STORE
+       ========================================================================== -->
+    <main id="store-screen" class="app-screen hidden">
+        <div class="store-header">
+            <div>
+                <h1 style="font-family: 'Oswald', sans-serif; font-size: 2rem; color: var(--fc-neon);">PACK STORE</h1>
+                <p class="text-muted">Open packs to build your ultimate squad</p>
+            </div>
+            <div class="user-hud">
+                <div class="hud-item coins">
+                    <i class="fa-solid fa-coins"></i> <span class="user-coin-balance">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="store-grid" class="store-grid">
+            <!-- Pack cards will be populated dynamically -->
+            <div class="text-center" style="grid-column: 1/-1; padding: 4rem;">
+                <div class="loading-spinner" style="margin: 0 auto;"></div>
+                <p class="loading-text">Loading packs...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       SCREEN 4: TRANSFER MARKET
+       ========================================================================== -->
+    <main id="market-screen" class="app-screen hidden">
+        <div class="market-header">
+            <div>
+                <h1 style="font-family: 'Oswald', sans-serif; font-size: 2rem; color: var(--fc-neon);">TRANSFER MARKET</h1>
+                <p class="text-muted">Buy and sell players from around the world</p>
+            </div>
+            <div class="user-hud">
+                <div class="hud-item coins">
+                    <i class="fa-solid fa-coins"></i> <span class="user-coin-balance">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="market-tabs">
+            <button class="market-tab active" data-tab="search">Search Market</button>
+            <button class="market-tab" data-tab="my-listings">My Listings</button>
+        </div>
+
+        <!-- Search Market Tab -->
+        <div id="tab-search" class="market-tab-content">
+            <div class="market-filters">
+                <div class="filter-group">
+                    <label>Search</label>
+                    <input type="text" id="market-search" class="search-input" placeholder="Player name...">
+                </div>
+                <div class="filter-group">
+                    <label>Position</label>
+                    <select id="market-position" class="filter-select">
+                        <option value="ALL">All Positions</option>
+                        <option value="ATT">Attackers</option>
+                        <option value="MID">Midfielders</option>
+                        <option value="DEF">Defenders</option>
+                        <option value="GK">Goalkeepers</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Rarity</label>
+                    <select id="market-rarity" class="filter-select">
+                        <option value="ALL">All Rarities</option>
+                        <option value="Bronze">Bronze</option>
+                        <option value="Silver">Silver</option>
+                        <option value="Gold">Gold</option>
+                        <option value="Rare Gold">Rare Gold</option>
+                        <option value="TOTW">TOTW</option>
+                        <option value="Icon">Icon</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Min Rating</label>
+                    <select id="market-min-rating" class="filter-select">
+                        <option value="0">Any</option>
+                        <option value="75">75+</option>
+                        <option value="80">80+</option>
+                        <option value="85">85+</option>
+                        <option value="90">90+</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Max Price</label>
+                    <select id="market-max-price" class="filter-select">
+                        <option value="0">Any</option>
+                        <option value="1000">1,000</option>
+                        <option value="10000">10,000</option>
+                        <option value="50000">50,000</option>
+                        <option value="100000">100,000</option>
+                    </select>
+                </div>
+                <button id="market-search-btn" class="btn btn-primary">Search</button>
+            </div>
+
+            <div id="market-grid" class="market-grid" style="margin-top: 2rem;">
+                <!-- Market listings will be populated dynamically -->
+                <div class="text-center" style="grid-column: 1/-1; padding: 4rem;">
+                    <div class="loading-spinner" style="margin: 0 auto;"></div>
+                    <p class="loading-text">Searching market...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- My Listings Tab -->
+        <div id="tab-my-listings" class="market-tab-content hidden">
+            <div id="my-listings-grid" class="market-grid" style="margin-top: 2rem;">
+                <!-- User's listings will be populated dynamically -->
+                <div class="text-center" style="grid-column: 1/-1; padding: 4rem;">
+                    <div class="loading-spinner" style="margin: 0 auto;"></div>
+                    <p class="loading-text">Loading your listings...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       SCREEN 5: CLUB
+       ========================================================================== -->
+    <main id="club-screen" class="app-screen hidden">
+        <div class="club-header">
+            <div>
+                <h1 style="font-family: 'Oswald', sans-serif; font-size: 2rem; color: var(--fc-neon);">MY CLUB</h1>
+                <p class="text-muted">Manage your player inventory</p>
+            </div>
+            <div class="club-stats">
+                <div class="club-stat">
+                    <div class="club-stat-value" id="club-total-players">0</div>
+                    <div class="club-stat-label">Total Players</div>
+                </div>
+                <div class="club-stat">
+                    <div class="club-stat-value" id="club-squad-rating">0</div>
+                    <div class="club-stat-label">Squad Rating</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="market-filters" style="margin-bottom: 2rem;">
+            <div class="filter-group">
+                <label>Filter</label>
+                <select id="club-filter" class="filter-select">
+                    <option value="ALL">All Players</option>
+                    <option value="Bronze">Bronze</option>
+                    <option value="Silver">Silver</option>
+                    <option value="Gold">Gold</option>
+                    <option value="Rare Gold">Rare Gold</option>
+                    <option value="TOTW">TOTW</option>
+                    <option value="Icon">Icon</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Sort</label>
+                <select id="club-sort" class="filter-select">
+                    <option value="rating-desc">Rating (High-Low)</option>
+                    <option value="rating-asc">Rating (Low-High)</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="club-grid" class="club-grid">
+            <!-- Club players will be populated dynamically -->
+            <div class="text-center" style="grid-column: 1/-1; padding: 4rem;">
+                <div class="loading-spinner" style="margin: 0 auto;"></div>
+                <p class="loading-text">Loading club...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       SCREEN 6: SQUAD BUILDER
+       ========================================================================== -->
+    <main id="squad-screen" class="app-screen hidden">
+        <div class="squad-builder-container">
+            <!-- Header -->
+            <div class="squad-builder-header">
+                <h1>SQUAD BUILDER</h1>
+                <div class="squad-info">
+                    <div class="info-item">
+                        <span class="info-label">Formation</span>
+                        <select id="formation-select" class="formation-select">
+                            <option value="4-3-3">4-3-3</option>
+                            <option value="4-4-2">4-4-2</option>
+                            <option value="3-5-2">3-5-2</option>
+                            <option value="4-2-3-1">4-2-3-1</option>
+                            <option value="5-3-2">5-3-2</option>
+                            <option value="4-1-4-1">4-1-4-1</option>
+                            <option value="3-4-3">3-4-3</option>
+                            <option value="4-3-2-1">4-3-2-1</option>
+                            <option value="5-2-3">5-2-3</option>
+                            <option value="4-5-1">4-5-1</option>
+                            <option value="3-4-2-1">3-4-2-1</option>
+                            <option value="4-4-1-1">4-4-1-1</option>
+                        </select>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Players</span>
+                        <span id="player-count" class="info-value">0/11</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Rating</span>
+                        <span id="squad-rating" class="info-value">0</span>
+                    </div>
+                </div>
+                <div class="squad-actions">
+                    <button id="auto-build-btn" class="action-btn primary">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Auto Build
+                    </button>
+                    <button id="clear-squad-btn" class="action-btn secondary">
+                        <i class="fa-solid fa-trash"></i> Clear
                     </button>
                 </div>
             </div>
 
-            <!-- Active Live Banner -->
-            <div id="active-event-banner" class="event-banner hidden">
-                <div class="event-info">
-                    <span class="event-tag">LIVE EVENT</span>
-                    <h3 id="event-title">Double Walkout Odds Active!</h3>
-                    <p id="event-description">Special promo packs are now live in the store with reduced pricing.</p>
+            <!-- Football Field -->
+            <div class="football-field">
+                <div class="field-grass"></div>
+                <div class="field-lines">
+                    <div class="center-line"></div>
+                    <div class="center-circle"></div>
+                    <div class="center-spot"></div>
+                    <div class="goal-area-top"></div>
+                    <div class="goal-area-bottom"></div>
+                    <div class="penalty-area-top"></div>
+                    <div class="penalty-area-bottom"></div>
+                </div>
+                <div id="formation-positions" class="formation-positions">
+                    <!-- Positions will be generated here -->
                 </div>
             </div>
-
-            <div class="dashboard-grid">
-                <!-- Squad Summary Card -->
-                <div class="dash-card">
-                    <div class="dash-card-header">
-                        <h3><i class="fa-solid fa-shield"></i> Active Squad</h3>
-                        <button class="btn btn-secondary btn-sm" data-screen="squad-screen">Manage</button>
-                    </div>
-                    <div class="dash-card-body squad-preview">
-                        <div class="squad-stat-box">
-                            <span class="label">Overall</span>
-                            <span class="value" id="home-squad-overall">0</span>
-                        </div>
-                        <div class="squad-stat-box">
-                            <span class="label">Chemistry</span>
-                            <span class="value" id="home-squad-chemistry">0 / 33</span>
-                        </div>
-                        <div class="squad-stat-box">
-                            <span class="label">Formation</span>
-                            <span class="value" id="home-squad-formation">4-3-3</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Market Summary Card -->
-                <div class="dash-card">
-                    <div class="dash-card-header">
-                        <h3><i class="fa-solid fa-chart-simple"></i> Transfer Market</h3>
-                        <button class="btn btn-secondary btn-sm" data-screen="market-screen">View Market</button>
-                    </div>
-                    <div class="dash-card-body">
-                        <div class="market-stat-row">
-                            <span>Active Listings:</span>
-                            <strong id="home-market-listings-count">0</strong>
-                        </div>
-                        <div class="market-stat-row">
-                            <span>Your Active Sales:</span>
-                            <strong id="home-user-sales-count">0 / 100</strong>
-                        </div>
-                        <div class="market-stat-row">
-                            <span>Market Index Status:</span>
-                            <strong id="home-market-trend" class="text-success">Stable</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pack Highlights -->
-                <div class="dash-card">
-                    <div class="dash-card-header">
-                        <h3><i class="fa-solid fa-box-open"></i> Featured Pack</h3>
-                        <button class="btn btn-secondary btn-sm" data-screen="store-screen">Store</button>
-                    </div>
-                    <div class="dash-card-body pack-featured-preview">
-                        <div class="featured-pack-art" id="home-featured-pack-art"></div>
-                        <div class="featured-pack-info">
-                            <h4 id="home-featured-pack-name">Ultimate Pack</h4>
-                            <p id="home-featured-pack-price">100,000 Coins</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- 2. SQUAD BUILDER SCREEN -->
-        <section id="squad-screen" class="view-screen">
-            <div class="squad-builder-header">
-                <div class="squad-info-bar">
-                    <div class="stat-pill">Rating: <strong id="squad-overall-rating">0</strong></div>
-                    <div class="stat-pill">Chemistry: <strong id="squad-chemistry-rating">0</strong> / 33</div>
-                    <div class="stat-pill">ATT: <strong id="squad-att-rating">0</strong></div>
-                    <div class="stat-pill">MID: <strong id="squad-mid-rating">0</strong></div>
-                    <div class="stat-pill">DEF: <strong id="squad-def-rating">0</strong></div>
-                </div>
-                <div class="squad-controls">
-                    <label for="formation-select">Formation:</label>
-                    <select id="formation-select" class="form-control">
-                        <option value="4-3-3">4-3-3</option>
-                        <option value="4-4-2">4-4-2</option>
-                        <option value="4-2-3-1">4-2-3-1</option>
-                        <option value="3-5-2">3-5-2</option>
-                        <option value="5-3-2">5-3-2</option>
-                    </select>
-                    <button class="btn btn-danger btn-sm" id="btn-clear-squad"><i class="fa-solid fa-trash"></i> Clear XI</button>
-                </div>
-            </div>
-
-            <div class="squad-layout-container">
-                <!-- Football Pitch (Starting XI) -->
-                <div class="pitch-container" id="football-pitch">
-                    <!-- Dynamic XI Player Slots Rendered Here -->
-                </div>
-
-                <!-- Bench and Reserves Drawer -->
-                <div class="squad-bench-panel">
-                    <h3>Bench & Substitutes</h3>
-                    <div class="bench-slots-grid" id="bench-container">
-                        <!-- 7 Bench Slots -->
-                    </div>
-
-                    <h3 class="margin-top-md">Available Club Players</h3>
-                    <div class="squad-club-search">
-                        <input type="text" id="squad-search-input" placeholder="Search player name..." class="form-control">
-                        <select id="squad-filter-pos" class="form-control">
-                            <option value="ALL">All Pos</option>
-                            <option value="GK">GK</option>
-                            <option value="DEF">DEF</option>
-                            <option value="MID">MID</option>
-                            <option value="FWD">FWD</option>
-                        </select>
-                    </div>
-                    <div class="club-reserve-list" id="club-reserves-container">
-                        <!-- Filtered Club Cards for Quick Drag/Swap -->
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- 3. CLUB INVENTORY SCREEN -->
-        <section id="club-screen" class="view-screen">
-            <div class="screen-header">
-                <h2>My Club Inventory</h2>
-                <div class="club-stats-summary">
-                    Total Players: <span id="club-total-count">0</span> | Total Club Value: <span id="club-total-value">0</span> Coins
-                </div>
-            </div>
-
-            <!-- Inventory Filters -->
-            <div class="filter-bar">
-                <input type="text" id="club-filter-name" placeholder="Search by name..." class="form-control">
-                <select id="club-filter-pos" class="form-control">
-                    <option value="ALL">All Positions</option>
-                    <option value="GK">GK</option>
-                    <option value="CB">CB</option>
-                    <option value="LB">LB</option>
-                    <option value="RB">RB</option>
-                    <option value="CM">CM</option>
-                    <option value="CAM">CAM</option>
-                    <option value="CDM">CDM</option>
-                    <option value="LW">LW</option>
-                    <option value="RW">RW</option>
-                    <option value="ST">ST</option>
-                </select>
-                <select id="club-filter-rarity" class="form-control">
-                    <option value="ALL">All Rarities</option>
-                    <option value="Bronze">Bronze</option>
-                    <option value="Silver">Silver</option>
-                    <option value="Gold">Gold</option>
-                    <option value="Special">Special</option>
-                </select>
-                <select id="club-sort-by" class="form-control">
-                    <option value="rating-desc">Rating: High to Low</option>
-                    <option value="rating-asc">Rating: Low to High</option>
-                    <option value="name-asc">Name: A to Z</option>
-                    <option value="price-desc">Value: High to Low</option>
-                </select>
-            </div>
-
-            <!-- Player Cards Grid -->
-            <div class="cards-grid" id="club-players-grid">
-                <!-- Dynamic Player Cards rendered here -->
-            </div>
-        </section>
-
-        <!-- 4. STORE / PACK OPENING SCREEN -->
-        <section id="store-screen" class="view-screen">
-            <div class="screen-header">
-                <h2>Pack Store</h2>
-                <p>Open packs to acquire elite football cards for your squad or trade on the market.</p>
-            </div>
-
-            <div class="packs-grid" id="store-packs-grid">
-                <!-- Packs rendered dynamically from database -->
-            </div>
-        </section>
-
-        <!-- 5. TRANSFER MARKET SCREEN -->
-        <section id="market-screen" class="view-screen">
-            <div class="screen-header">
-                <h2>Transfer Market</h2>
-                <p>Live AI & User Trading Exchange</p>
-            </div>
-
-            <!-- Market Search Bar -->
-            <div class="market-search-panel">
-                <div class="search-row">
-                    <div class="form-group">
-                        <label>Player Name</label>
-                        <input type="text" id="mkt-search-name" placeholder="e.g. Sterling" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Position</label>
-                        <select id="mkt-search-pos" class="form-control">
-                            <option value="ALL">Any Position</option>
-                            <option value="GK">GK</option>
-                            <option value="DEF">DEF</option>
-                            <option value="MID">MID</option>
-                            <option value="FWD">FWD</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Min Rating</label>
-                        <input type="number" id="mkt-search-min-rating" placeholder="45" min="45" max="99" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Rating</label>
-                        <input type="number" id="mkt-search-max-rating" placeholder="99" min="45" max="99" class="form-control">
-                    </div>
-                </div>
-                <div class="search-row">
-                    <div class="form-group">
-                        <label>Min Price</label>
-                        <input type="number" id="mkt-search-min-price" placeholder="200" min="0" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Price</label>
-                        <input type="number" id="mkt-search-max-price" placeholder="15,000,000" min="0" class="form-control">
-                    </div>
-                    <div class="form-group search-actions">
-                        <button class="btn btn-primary" id="btn-market-search"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
-                        <button class="btn btn-secondary" id="btn-market-reset">Reset</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Market Listings Results -->
-            <div class="market-results-header">
-                <h3>Live Listings (<span id="market-count-display">0</span>)</h3>
-                <div class="market-tax-notice"><i class="fa-solid fa-circle-info"></i> EA-Style Transfer Tax: <strong id="mkt-tax-rate-display">5%</strong></div>
-            </div>
-
-            <div class="cards-grid" id="market-listings-grid">
-                <!-- Active Market Listings rendered dynamically -->
-            </div>
-        </section>
-
-        <!-- 6. PLAY / MATCHMAKING SCREEN -->
-        <section id="play-screen" class="view-screen">
-            <div class="screen-header center-text">
-                <h2>Match Center</h2>
-                <p>Compete against real managers or AI clubs to earn points, coin rewards, and rank up.</p>
-            </div>
-
-            <div class="match-modes-grid">
-                <!-- Ranked Mode -->
-                <div class="mode-card">
-                    <div class="mode-icon"><i class="fa-solid fa-trophy text-gold"></i></div>
-                    <h3>Ranked Match</h3>
-                    <p>Compete for MMR points. Automatic promotion/relegation. Priority real user queue.</p>
-                    <button class="btn btn-primary btn-large" id="btn-start-ranked">Search Ranked</button>
-                </div>
-
-                <!-- Unranked Mode -->
-                <div class="mode-card">
-                    <div class="mode-icon"><i class="fa-solid fa-futbol text-blue"></i></div>
-                    <h3>Unranked Friendly</h3>
-                    <p>Test tactics and test squads without rank point consequences. Stats are tracked.</p>
-                    <button class="btn btn-secondary btn-large" id="btn-start-unranked">Search Unranked</button>
-                </div>
-
-                <!-- Friend Match Mode -->
-                <div class="mode-card">
-                    <div class="mode-icon"><i class="fa-solid fa-handshake"></i></div>
-                    <h3>Direct Friend Match</h3>
-                    <p>Instantly challenge one of the other 2 real registered users.</p>
-                    <select id="friend-select-user" class="form-control margin-bottom-sm">
-                        <option value="">Select Real Player...</option>
-                    </select>
-                    <button class="btn btn-success btn-large" id="btn-start-friend">Challenge</button>
-                </div>
-            </div>
-
-            <!-- Active Matchmaking Radar Overlay / Modal -->
-            <div id="matchmaking-modal" class="modal-overlay hidden">
-                <div class="modal-card center-text">
-                    <div class="radar-spinner"></div>
-                    <h2>Searching Opponent...</h2>
-                    <p id="mm-status-text">Searching for active real players (15s timeout)...</p>
-                    <div class="mm-timer" id="mm-timer-display">00:15</div>
-                    <button class="btn btn-danger" id="btn-cancel-mm">Cancel Search</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- 7. LIVE MATCH SIMULATOR SCREEN -->
-        <section id="match-screen" class="view-screen">
-            <div class="match-scoreboard">
-                <div class="team-side home-side">
-                    <div class="team-logo-placeholder" id="match-home-logo"><i class="fa-solid fa-shield-halved"></i></div>
-                    <h3 id="match-home-name">Home Club</h3>
-                    <span class="team-rating-badge" id="match-home-rating">80</span>
-                </div>
-
-                <div class="score-center">
-                    <div class="match-time-badge" id="match-timer">00'</div>
-                    <div class="match-score"><span id="match-home-score">0</span> - <span id="match-away-score">0</span></div>
-                    <div class="match-status-tag" id="match-status-tag">1st Half</div>
-                </div>
-
-                <div class="team-side away-side">
-                    <div class="team-logo-placeholder" id="match-away-logo"><i class="fa-solid fa-shield-halved"></i></div>
-                    <h3 id="match-away-name">Away Club</h3>
-                    <span class="team-rating-badge" id="match-away-rating">78</span>
-                </div>
-            </div>
-
-            <!-- Live Momentum Bar -->
-            <div class="momentum-container">
-                <span class="lbl">Home Pressure</span>
-                <div class="momentum-bar">
-                    <div class="momentum-fill" id="momentum-fill" style="width: 50%;"></div>
-                </div>
-                <span class="lbl">Away Pressure</span>
-            </div>
-
-            <div class="match-body-grid">
-                <!-- Live Commentary Stream -->
-                <div class="commentary-panel">
-                    <h3><i class="fa-solid fa-microphone text-gold"></i> Live Match Commentary</h3>
-                    <div class="commentary-log" id="commentary-log">
-                        <!-- Minute events appended here -->
-                    </div>
-                </div>
-
-                <!-- Match Live Statistics -->
-                <div class="match-stats-panel">
-                    <h3>Match Statistics</h3>
-                    <div class="stat-comparison-row">
-                        <span id="stat-home-possession">50%</span>
-                        <span>Possession</span>
-                        <span id="stat-away-possession">50%</span>
-                    </div>
-                    <div class="stat-comparison-row">
-                        <span id="stat-home-shots">0</span>
-                        <span>Total Shots</span>
-                        <span id="stat-away-shots">0</span>
-                    </div>
-                    <div class="stat-comparison-row">
-                        <span id="stat-home-xg">0.00</span>
-                        <span>Expected Goals (xG)</span>
-                        <span id="stat-away-xg">0.00</span>
-                    </div>
-                    <div class="stat-comparison-row">
-                        <span id="stat-home-corners">0</span>
-                        <span>Corners</span>
-                        <span id="stat-away-corners">0</span>
-                    </div>
-                    <div class="stat-comparison-row">
-                        <span id="stat-home-cards">0</span>
-                        <span>Yellow Cards</span>
-                        <span id="stat-away-cards">0</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Interactive Penalty Kick Mini-Game Overlay -->
-            <div id="penalty-mini-game" class="modal-overlay hidden">
-                <div class="modal-card penalty-card center-text">
-                    <h2 class="text-gold"><i class="fa-solid fa-futbol"></i> PENALTY AWARDED!</h2>
-                    <p>Select your shot target direction:</p>
-                    <div class="penalty-goal-grid">
-                        <button class="penalty-target-btn" data-target="TL">Top Left</button>
-                        <button class="penalty-target-btn" data-target="TR">Top Right</button>
-                        <button class="penalty-target-btn target-center" data-target="C">Center</button>
-                        <button class="penalty-target-btn" data-target="BL">Bottom Left</button>
-                        <button class="penalty-target-btn" data-target="BR">Bottom Right</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Match Result Screen Modal -->
-            <div id="match-result-modal" class="modal-overlay hidden">
-                <div class="modal-card center-text">
-                    <h1 id="res-outcome-title">VICTORY!</h1>
-                    <div class="res-score-line" id="res-score-display">3 - 1</div>
-                    <div class="res-rewards-box">
-                        <div class="reward-row"><span>Coins Earned:</span> <strong id="res-coins-earned" class="text-gold">+500</strong></div>
-                        <div class="reward-row"><span>Rank Points Delta:</span> <strong id="res-rank-points" class="text-success">+25</strong></div>
-                    </div>
-                    <button class="btn btn-primary btn-large margin-top-md" id="btn-close-match-result">Return to Dashboard</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- 8. USER STATISTICS SCREEN -->
-        <section id="stats-screen" class="view-screen">
-            <div class="screen-header">
-                <h2>Club Performance Statistics</h2>
-                <p>Lifetime tracking records, financial statement, and competitive history.</p>
-            </div>
-
-            <div class="stats-overview-grid">
-                <div class="stat-box-card">
-                    <div class="icon"><i class="fa-solid fa-trophy"></i></div>
-                    <div class="stat-val" id="st-record">0W - 0D - 0L</div>
-                    <div class="stat-lbl">Win / Draw / Loss Record</div>
-                </div>
-                <div class="stat-box-card">
-                    <div class="icon"><i class="fa-solid fa-coins"></i></div>
-                    <div class="stat-val" id="st-coins-earned">0</div>
-                    <div class="stat-lbl">Lifetime Coins Earned</div>
-                </div>
-                <div class="stat-box-card">
-                    <div class="icon"><i class="fa-solid fa-chart-line"></i></div>
-                    <div class="stat-val" id="st-transfer-profit">0</div>
-                    <div class="stat-lbl">Transfer Market Profit</div>
-                </div>
-                <div class="stat-box-card">
-                    <div class="icon"><i class="fa-solid fa-box-open"></i></div>
-                    <div class="stat-val" id="st-packs-opened">0</div>
-                    <div class="stat-lbl">Total Packs Opened</div>
-                </div>
-            </div>
-
-            <div class="stats-details-table margin-top-lg">
-                <h3>Detailed Career Metrics</h3>
-                <table class="data-table">
-                    <tbody>
-                        <tr><td>Goals Scored</td><td id="st-goals-scored">0</td></tr>
-                        <tr><td>Goals Conceded</td><td id="st-goals-conceded">0</td></tr>
-                        <tr><td>Biggest Victory</td><td id="st-biggest-win">N/A</td></tr>
-                        <tr><td>Longest Winning Streak</td><td id="st-win-streak">0 Games</td></tr>
-                        <tr><td>Cards Purchased on Market</td><td id="st-players-bought">0</td></tr>
-                        <tr><td>Cards Sold on Market</td><td id="st-players-sold">0</td></tr>
-                        <tr><td>Highest Single Card Sale</td><td id="st-highest-sale">0 Coins</td></tr>
-                        <tr><td>Best Pack Pull</td><td id="st-best-pull">None</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- 9. ADMIN PANEL SCREEN (OWNER ONLY) -->
-        <section id="admin-screen" class="view-screen">
-            <div class="screen-header text-danger">
-                <h2><i class="fa-solid fa-user-shield"></i> Master Control Admin Panel</h2>
-                <p>System Architecture, Player Database Editor, Pack Creator, and AI Economy Controller.</p>
-            </div>
-
-            <div class="admin-tabs-nav">
-                <button class="admin-tab-btn active" data-tab="adm-players">Players Database</button>
-                <button class="admin-tab-btn" data-tab="adm-packs">Pack Studio</button>
-                <button class="admin-tab-btn" data-tab="adm-ai">AI Economy & Clubs</button>
-                <button class="admin-tab-btn" data-tab="adm-events">Live Events</button>
-            </div>
-
-            <!-- Tab 1: Player Database Editor -->
-            <div id="adm-players" class="admin-tab-content active">
-                <h3>Create New Player Definition</h3>
-                <form id="admin-create-player-form" class="admin-form-grid">
-                    <input type="text" id="adm-p-name" placeholder="Player Name" required class="form-control">
-                    <input type="number" id="adm-p-rating" placeholder="Overall (45-99)" min="45" max="99" required class="form-control">
-                    <select id="adm-p-pos" class="form-control" required>
-                        <option value="GK">GK</option>
-                        <option value="CB">CB</option>
-                        <option value="LB">LB</option>
-                        <option value="RB">RB</option>
-                        <option value="CM">CM</option>
-                        <option value="CAM">CAM</option>
-                        <option value="CDM">CDM</option>
-                        <option value="LW">LW</option>
-                        <option value="RW">RW</option>
-                        <option value="ST">ST</option>
-                    </select>
-                    <input type="text" id="adm-p-nation" placeholder="Nation" required class="form-control">
-                    <input type="text" id="adm-p-club" placeholder="Club Name" required class="form-control">
-                    <input type="text" id="adm-p-league" placeholder="League Name" required class="form-control">
-                    
-                    <!-- 6 Face Stats -->
-                    <input type="number" id="adm-p-pac" placeholder="Pace/Ref" min="1" max="99" class="form-control">
-                    <input type="number" id="adm-p-sho" placeholder="Shooting" min="1" max="99" class="form-control">
-                    <input type="number" id="adm-p-pas" placeholder="Passing" min="1" max="99" class="form-control">
-                    <input type="number" id="adm-p-dri" placeholder="Dribbling" min="1" max="99" class="form-control">
-                    <input type="number" id="adm-p-def" placeholder="Defending" min="1" max="99" class="form-control">
-                    <input type="number" id="adm-p-phy" placeholder="Physical" min="1" max="99" class="form-control">
-
-                    <button type="submit" class="btn btn-success btn-full span-all">Create Player Entry</button>
-                </form>
-
-                <h3 class="margin-top-lg">Database Master List</h3>
-                <div class="admin-player-table-wrapper">
-                    <table class="data-table" id="admin-player-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th><th>Name</th><th>Rating</th><th>Pos</th><th>Nation</th><th>Club</th><th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody><!-- Loaded dynamically --></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Tab 2: Pack Creator Studio -->
-            <div id="adm-packs" class="admin-tab-content">
-                <h3>Pack Configuration</h3>
-                <form id="admin-create-pack-form" class="admin-form-grid">
-                    <input type="text" id="adm-pack-name" placeholder="Pack Title" required class="form-control">
-                    <input type="number" id="adm-pack-price" placeholder="Price in Coins" required class="form-control">
-                    <input type="number" id="adm-pack-cards" placeholder="Number of Cards" value="5" required class="form-control">
-                    <input type="number" id="adm-pack-min-rating" placeholder="Min Rating Guarantee" value="45" class="form-control">
-                    <select id="adm-pack-rarity" class="form-control">
-                        <option value="Bronze">Bronze Base</option>
-                        <option value="Silver">Silver Base</option>
-                        <option value="Gold">Gold Base</option>
-                        <option value="Special">Special Promo</option>
-                    </select>
-                    <button type="submit" class="btn btn-primary span-all">Save Pack Entry</button>
-                </form>
-            </div>
-
-            <!-- Tab 3: AI Economy & Market Controller -->
-            <div id="adm-ai" class="admin-tab-content">
-                <h3>AI Simulation Settings</h3>
-                <div class="admin-form-grid">
-                    <div class="form-group">
-                        <label>Active AI Clubs (~2000 Target)</label>
-                        <input type="number" id="adm-ai-count" value="2000" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Market Action Speed (Seconds)</label>
-                        <input type="number" id="adm-ai-speed" value="3" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>Transfer Tax %</label>
-                        <input type="number" id="adm-ai-tax" value="5" class="form-control">
-                    </div>
-                </div>
-                <div class="margin-top-md">
-                    <button class="btn btn-warning" id="btn-trigger-market-crash">Simulate Market Crash (-20%)</button>
-                    <button class="btn btn-success" id="btn-trigger-market-boom">Simulate Market Boom (+20%)</button>
-                </div>
-            </div>
-
-            <!-- Tab 4: Live Events Controller -->
-            <div id="adm-events" class="admin-tab-content">
-                <h3>Event Management</h3>
-                <button class="btn btn-primary" id="btn-toggle-double-walkouts">Toggle 2x Walkout Event</button>
-            </div>
-        </section>
-
+        </div>
     </main>
 
-    <!-- Global Pack Opening Reveal Overlay & Walkout Player Canvas -->
-    <div id="pack-opening-modal" class="modal-overlay pack-animation-modal hidden">
-        <div class="pack-reveal-stage" id="pack-reveal-stage">
-            <div class="pack-3d-box" id="pack-3d-box">
-                <div class="pack-front"></div>
-            </div>
-            
-            <!-- Walkout Spotlight & Player Display -->
-            <div class="walkout-container hidden" id="walkout-container">
-                <div class="walkout-light-beams"></div>
-                <div class="walkout-card-mount" id="walkout-card-mount"></div>
-                <h1 class="walkout-player-name" id="walkout-player-name">PLAYER NAME</h1>
-                <button class="btn btn-gold btn-large margin-top-lg" id="btn-skip-walkout">Continue to Pulls</button>
+
+
+    <!-- ==========================================================================
+       SCREEN 8: ADMIN PANEL
+       ========================================================================== -->
+    <main id="admin-screen" class="app-screen hidden">
+        <div class="admin-container">
+            <div class="admin-sidebar">
+                <div class="admin-nav-item active" data-admin-section="players">
+                    <i class="fa-solid fa-users"></i> Players
+                </div>
+                <div class="admin-nav-item" data-admin-section="packs">
+                    <i class="fa-solid fa-box"></i> Packs
+                </div>
+                <div class="admin-nav-item" data-admin-section="market">
+                    <i class="fa-solid fa-arrow-right-arrow-left"></i> Market
+                </div>
+                <div class="admin-nav-item" data-admin-section="settings">
+                    <i class="fa-solid fa-cog"></i> Settings
+                </div>
+                <div class="admin-nav-item" data-admin-section="users">
+                    <i class="fa-solid fa-user-shield"></i> Users
+                </div>
             </div>
 
-            <!-- Opened Pack Summary Grid -->
-            <div class="opened-pack-summary hidden" id="opened-pack-summary">
-                <h2>Pack Contents</h2>
-                <div class="cards-grid" id="opened-cards-grid"></div>
-                <div class="pack-summary-actions">
-                    <button class="btn btn-success" id="btn-pack-send-all">Send All to Club</button>
-                    <button class="btn btn-danger" id="btn-pack-quicksell-all">Quick Sell Duplicate/All</button>
+            <div class="admin-content">
+                <!-- Players Section -->
+                <div id="admin-players" class="admin-section active">
+                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">PLAYER MANAGEMENT</h2>
+                    <div class="flex gap-4 mb-4">
+                        <button id="admin-add-player-btn" class="btn btn-primary">
+                            <i class="fa-solid fa-plus"></i> Add Player
+                        </button>
+                        <button id="admin-export-players-btn" class="btn btn-secondary">
+                            <i class="fa-solid fa-download"></i> Export Database
+                        </button>
+                        <button id="admin-import-players-btn" class="btn btn-secondary">
+                            <i class="fa-solid fa-upload"></i> Import Database
+                        </button>
+                    </div>
+                    <div id="admin-players-table">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Rating</th>
+                                    <th>Position</th>
+                                    <th>Rarity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-players-list">
+                                <!-- Player rows will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Packs Section -->
+                <div id="admin-packs" class="admin-section">
+                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">PACK MANAGEMENT</h2>
+                    <div class="flex gap-4 mb-4">
+                        <button id="admin-add-pack-btn" class="btn btn-primary">
+                            <i class="fa-solid fa-plus"></i> Add Pack
+                        </button>
+                        <button id="admin-reset-packs-btn" class="btn btn-secondary">
+                            <i class="fa-solid fa-rotate"></i> Reset to Default
+                        </button>
+                    </div>
+                    <div id="admin-packs-table">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Cost</th>
+                                    <th>Items</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-packs-list">
+                                <!-- Pack rows will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Market Section -->
+                <div id="admin-market" class="admin-section">
+                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">MARKET MANAGEMENT</h2>
+                    <div class="flex gap-4 mb-4">
+                        <button id="admin-clear-market-btn" class="btn btn-danger">
+                            <i class="fa-solid fa-trash"></i> Clear All Listings
+                        </button>
+                        <button id="admin-seed-market-btn" class="btn btn-primary">
+                            <i class="fa-solid fa-seedling"></i> Seed Market
+                        </button>
+                    </div>
+                    <div class="dash-card" style="padding: 1.5rem; margin-bottom: 1rem;">
+                        <h3>Market Statistics</h3>
+                        <div class="flex gap-4 mt-4">
+                            <div>
+                                <div class="text-muted">Total Listings</div>
+                                <div id="admin-market-count" style="font-size: 1.5rem; color: var(--fc-neon);">0</div>
+                            </div>
+                            <div>
+                                <div class="text-muted">Active Listings</div>
+                                <div id="admin-market-active" style="font-size: 1.5rem; color: var(--fc-neon);">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="admin-market-table">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Player</th>
+                                    <th>Rating</th>
+                                    <th>Price</th>
+                                    <th>Seller</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-market-list">
+                                <!-- Market rows will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Settings Section -->
+                <div id="admin-settings" class="admin-section">
+                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">GAME SETTINGS</h2>
+                    <div class="dash-card" style="padding: 1.5rem; margin-bottom: 1rem;">
+                        <h3>Economy Settings</h3>
+                        <div class="form-group mt-4">
+                            <label>Market Tax Rate (%)</label>
+                            <input type="number" id="admin-tax-rate" class="search-input" value="5" min="0" max="20">
+                        </div>
+                        <div class="form-group">
+                            <label>Starting Coins</label>
+                            <input type="number" id="admin-starting-coins" class="search-input" value="10000" min="0">
+                        </div>
+                        <button id="admin-save-economy-btn" class="btn btn-primary">Save Economy Settings</button>
+                    </div>
+                    <div class="dash-card" style="padding: 1.5rem;">
+                        <h3>AI Settings</h3>
+                        <div class="form-group mt-4">
+                            <label>AI Market Activity</label>
+                            <select id="admin-ai-activity" class="filter-select">
+                                <option value="enabled">Enabled</option>
+                                <option value="disabled">Disabled</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>AI Listing Interval (minutes)</label>
+                            <input type="number" id="admin-ai-interval" class="search-input" value="5" min="1" max="60">
+                        </div>
+                        <button id="admin-save-ai-btn" class="btn btn-primary">Save AI Settings</button>
+                    </div>
+                </div>
+
+                <!-- Users Section -->
+                <div id="admin-users" class="admin-section">
+                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">USER MANAGEMENT</h2>
+                    <div class="flex gap-4 mb-4">
+                        <input type="text" id="admin-user-search" class="search-input" placeholder="Search users...">
+                        <button id="admin-user-search-btn" class="btn btn-primary">Search</button>
+                    </div>
+                    <div id="admin-users-table">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>UID</th>
+                                    <th>Club Name</th>
+                                    <th>Email</th>
+                                    <th>Coins</th>
+                                    <th>Role</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-list">
+                                <!-- User rows will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
-    <!-- Modals: Player Quick-Sell / List on Market Confirmation -->
-    <div id="player-action-modal" class="modal-overlay hidden">
-        <div class="modal-card">
-            <button class="modal-close" id="btn-close-action-modal">&times;</button>
-            <div class="modal-card-body" id="player-action-modal-body">
-                <!-- Dynamically filled with selected Player Card & Controls -->
+    <!-- ==========================================================================
+       SCREEN 9: MATCHMAKING
+       ========================================================================== -->
+    <main id="matchmaking-screen" class="app-screen hidden">
+        <div class="matchmaking-container">
+            <div class="matchmaking-header">
+                <h2>Play Match</h2>
+                <p class="text-muted">Your Rank: <span id="user-rank-display" class="rank-badge">Amateur</span></p>
+                <p class="text-muted">Rank Points: <span id="user-rank-points">0</span> / <span id="next-rank-points">100</span></p>
             </div>
+            
+            <!-- Matchmaking Options (default view) -->
+            <div id="matchmaking-options" class="matchmaking-options">
+                <button class="matchmaking-btn ranked-btn" data-match-type="ranked">
+                    <div class="btn-icon">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+                    <div class="btn-content">
+                        <h3>Ranked</h3>
+                        <p>Compete for rank points</p>
+                    </div>
+                </button>
+                
+                <button class="matchmaking-btn unranked-btn" data-match-type="unranked">
+                    <div class="btn-icon">
+                        <i class="fa-solid fa-gamepad"></i>
+                    </div>
+                    <div class="btn-content">
+                        <h3>Unranked</h3>
+                        <p>Play without rank pressure</p>
+                    </div>
+                </button>
+                
+                <button class="matchmaking-btn friend-btn" data-match-type="friend">
+                    <div class="btn-icon">
+                        <i class="fa-solid fa-user-group"></i>
+                    </div>
+                    <div class="btn-content">
+                        <h3>Friend</h3>
+                        <p>Play with a friend</p>
+                    </div>
+                </button>
+            </div>
+            
+            <!-- Ready Screen (hidden by default) -->
+            <div id="ready-screen-container" class="ready-screen-container hidden">
+                <!-- Ready screen content will be injected here -->
+            </div>
+            
+            <!-- Cooldown Display -->
+            <div class="cooldown-display hidden" id="matchmaking-cooldown">
+                <div class="cooldown-icon">
+                    <i class="fa-solid fa-clock"></i>
+                </div>
+                <div class="cooldown-info">
+                    <h3>Match Cooldown</h3>
+                    <p>Next match available in: <span id="cooldown-timer-display">4:00</span></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Searching Overlay -->
+        <div class="matchmaking-search-overlay hidden" id="search-overlay">
+            <div class="search-content">
+                <div class="search-animation">
+                    <div class="search-ring"></div>
+                    <div class="search-ring"></div>
+                    <div class="search-ring"></div>
+                </div>
+                <h3 id="search-status">Searching for opponent...</h3>
+                <p class="search-timer" id="search-timer">20</p>
+                <button class="btn btn-secondary cancel-search-btn" id="cancel-search-btn">
+                    <i class="fa-solid fa-xmark"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       SCREEN 10: MATCH PLAY
+       ========================================================================== -->
+    <main id="match-screen" class="app-screen hidden">
+        <div class="match-container">
+            <!-- Scoreboard -->
+            <div class="scoreboard">
+                <div class="scoreboard-team home">
+                    <div class="team-name" id="match-home-name">Home Team</div>
+                    <div class="team-score" id="match-home-score">0</div>
+                </div>
+                <div class="scoreboard-center">
+                    <div class="match-time" id="match-time">0'</div>
+                </div>
+                <div class="scoreboard-team away">
+                    <div class="team-name" id="match-away-name">Away Team</div>
+                    <div class="team-score" id="match-away-score">0</div>
+                </div>
+            </div>
+
+            <!-- Football Field -->
+            <div class="field-container">
+                <div class="football-field" id="football-field">
+                    <!-- Field markings -->
+                    <div class="field-markings">
+                        <div class="halfway-line"></div>
+                        <div class="center-circle"></div>
+                        <div class="center-spot"></div>
+                        <div class="penalty-box-left"></div>
+                        <div class="penalty-box-right"></div>
+                        <div class="goal-area-left"></div>
+                        <div class="goal-area-right"></div>
+                        <div class="goal-left"></div>
+                        <div class="goal-right"></div>
+                    </div>
+                    
+                    <!-- Ball -->
+                    <div class="ball" id="ball"></div>
+                    
+                    <!-- Goal Indicators -->
+                    <div class="goal-indicator home-goal hidden" id="home-goal-indicator">
+                        <div class="goal-score" id="home-goal-score">0</div>
+                    </div>
+                    <div class="goal-indicator away-goal hidden" id="away-goal-indicator">
+                        <div class="goal-score" id="away-goal-score">0</div>
+                    </div>
+                    
+                    <!-- Attack Banner -->
+                    <div class="attack-banner hidden" id="attack-banner">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>Attack for <span id="attack-team">Team</span></span>
+                    </div>
+                    
+                    <!-- Goal Banner -->
+                    <div class="goal-banner hidden" id="goal-banner">
+                        <div class="goal-icon">⚽</div>
+                        <div class="goal-text">GOAL!</div>
+                        <div class="goal-scorer" id="goal-scorer">Player</div>
+                        <div class="goal-assist" id="goal-assist">Assist: Player</div>
+                        <div class="goal-minute" id="goal-minute">45'</div>
+                    </div>
+                    
+                    <!-- Half-Time Banner -->
+                    <div class="halftime-banner hidden" id="halftime-banner">
+                        <div class="halftime-text">HALF TIME</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       SQUAD PREVIEW OVERLAY
+       ========================================================================== -->
+    <div id="squad-preview-overlay" class="squad-preview-overlay hidden">
+        <div class="squad-preview-content">
+            <div class="squad-preview-header">
+                <h2>MATCH PREVIEW</h2>
+            </div>
+            
+            <div class="squads-container">
+                <!-- Home Squad -->
+                <div class="squad-preview-team home">
+                    <div class="team-preview-header">
+                        <h3 id="preview-home-name">Home Team</h3>
+                        <div class="team-rating" id="preview-home-rating">0</div>
+                    </div>
+                    <div class="squad-list" id="preview-home-squad">
+                        <!-- Players will be listed here -->
+                    </div>
+                </div>
+                
+                <!-- VS -->
+                <div class="vs-divider">VS</div>
+                
+                <!-- Away Squad -->
+                <div class="squad-preview-team away">
+                    <div class="team-preview-header">
+                        <h3 id="preview-away-name">Away Team</h3>
+                        <div class="team-rating" id="preview-away-rating">0</div>
+                    </div>
+                    <div class="squad-list" id="preview-away-squad">
+                        <!-- Players will be listed here -->
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" id="start-match-btn">Start Match</button>
         </div>
     </div>
 
-    <!-- Firebase SDK Compat Imports -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+            <!-- Match Stats -->
+            <div class="match-stats-bar">
+                <div class="stat-group">
+                    <div class="stat-label">Possession</div>
+                    <div class="stat-value" id="match-possession">50% - 50%</div>
+                </div>
+                <div class="stat-group">
+                    <div class="stat-label">Shots</div>
+                    <div class="stat-value" id="match-shots">0 - 0</div>
+                </div>
+                <div class="stat-group">
+                    <div class="stat-label">On Target</div>
+                    <div class="stat-value" id="match-shots-on-target">0 - 0</div>
+                </div>
+                <div class="stat-group">
+                    <div class="stat-label">Corners</div>
+                    <div class="stat-value" id="match-corners">0 - 0</div>
+                </div>
+                <div class="stat-group">
+                    <div class="stat-label">Fouls</div>
+                    <div class="stat-value" id="match-fouls">0 - 0</div>
+                </div>
+                <div class="stat-group">
+                    <div class="stat-label">xG</div>
+                    <div class="stat-value" id="match-xg">0.00 - 0.00</div>
+                </div>
+            </div>
 
-    <!-- Application Script Modules (Strict Modular Dependency Order) -->
-    <script src="firebase.js"></script>
-    <script src="utils.js"></script>
-    <script src="database.js"></script>
-    <script src="auth.js"></script>
-    <script src="players.js"></script>
-    <script src="club.js"></script>
-    <script src="squad.js"></script>
-    <script src="market.js"></script>
-    <script src="ai.js"></script>
-    <script src="matchmaking.js"></script>
-    <script src="match.js"></script>
-    <script src="store.js"></script>
-    <script src="admin.js"></script>
-    <script src="ui.js"></script>
+            <!-- Commentary -->
+            <div class="match-commentary">
+                <div class="commentary-feed" id="commentary-feed">
+                    <div class="commentary-item">Match is about to begin...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       MATCH RESULTS OVERLAY
+       ========================================================================== -->
+    <div id="match-results-overlay" class="match-results-container hidden">
+        <div class="match-results-content">
+            <div class="results-header">
+                <h2>FULL TIME</h2>
+                <div class="final-score">
+                    <span id="results-home-name">Home Team</span>
+                    <span class="score-divider">-</span>
+                    <span id="results-home-score">0</span>
+                    <span class="score-divider">:</span>
+                    <span id="results-away-score">0</span>
+                    <span class="score-divider">-</span>
+                    <span id="results-away-name">Away Team</span>
+                </div>
+            </div>
+            
+            <div class="match-stats-summary">
+                <div class="stat-row">
+                    <span class="stat-label">Possession</span>
+                    <span class="stat-value" id="results-possession">50% - 50%</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Shots</span>
+                    <span class="stat-value" id="results-shots">0 - 0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Shots on Target</span>
+                    <span class="stat-value" id="results-shots-on-target">0 - 0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Corners</span>
+                    <span class="stat-value" id="results-corners">0 - 0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Fouls</span>
+                    <span class="stat-value" id="results-fouls">0 - 0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Expected Goals (xG)</span>
+                    <span class="stat-value" id="results-xg">0.00 - 0.00</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Pass Accuracy</span>
+                    <span class="stat-value" id="results-pass-accuracy">0% - 0%</span>
+                </div>
+            </div>
+
+            <div class="goals-summary">
+                <h3>Goals</h3>
+                <div id="goals-list" class="goals-list">
+                    <!-- Goals will be listed here -->
+                </div>
+            </div>
+
+            <div class="player-of-match-section">
+                <h3>Player of the Match</h3>
+                <div class="player-name" id="player-of-match">Player Name</div>
+            </div>
+
+            <div class="rewards-section">
+                <h3>Match Rewards</h3>
+                <div class="rewards-grid">
+                    <div class="reward-item">
+                        <i class="fa-solid fa-coins"></i>
+                        <span id="reward-coins">0</span> Coins
+                    </div>
+                    <div class="reward-item">
+                        <i class="fa-solid fa-star"></i>
+                        <span id="reward-xp">0</span> XP
+                    </div>
+                    <div class="reward-item">
+                        <i class="fa-solid fa-trophy"></i>
+                        <span id="reward-rank-points">0</span> Rank Points
+                    </div>
+                    <div class="reward-item">
+                        <i class="fa-solid fa-box-open"></i>
+                        <span id="reward-pack-progress">0%</span> Pack Progress
+                    </div>
+                    <div class="reward-item">
+                        <i class="fa-solid fa-flag"></i>
+                        <span id="reward-club-xp">0</span> Club XP
+                    </div>
+                </div>
+            </div>
+
+            <div class="cooldown-section" id="cooldown-section">
+                <h3>Next Match Available In:</h3>
+                <div class="cooldown-timer" id="cooldown-timer">4:00</div>
+            </div>
+
+            <button class="btn btn-primary" id="return-to-menu-btn">Return to Menu</button>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+       PACK OPENING OVERLAY
+       ========================================================================== -->
+    <div id="pack-opening-overlay" class="pack-opening-container hidden">
+        <!-- Pack opening animation will be rendered here -->
+    </div>
+
+    <!-- ==========================================================================
+       TOAST CONTAINER
+       ========================================================================== -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- ==========================================================================
+       MODAL CONTAINER
+       ========================================================================== -->
+    <div id="modal-container"></div>
+
+    <!-- ==========================================================================
+       JAVASCRIPT APPLICATION
+       ========================================================================== -->
+    <script type="module" src="app.js"></script>
 </body>
 </html>
