@@ -678,12 +678,20 @@ export async function readDataWithCache(path, ttl = 60000) {
  * @returns {Promise<void>}
  */
 export async function setUserOnline(userId) {
-    const onlineRef = ref(db, `${PATHS.ONLINE}/${userId}`);
-    await set(onlineRef, {
-        userId: userId,
-        lastSeen: Date.now(),
-        clubName: window.userProfile?.profile?.clubName || 'Unknown'
-    });
+    try {
+        const onlineRef = ref(db, `${PATHS.ONLINE}/${userId}`);
+        const onlineData = {
+            userId: userId,
+            lastSeen: Date.now(),
+            clubName: window.userProfile?.profile?.clubName || 'Unknown'
+        };
+        await set(onlineRef, onlineData);
+        console.log('[Database] User set as online:', userId, onlineData.clubName);
+        return true;
+    } catch (error) {
+        console.error('[Database] Error setting user online:', error);
+        return false;
+    }
 }
 
 /**
@@ -710,14 +718,24 @@ export async function updateUserLastSeen(userId) {
  * @returns {Promise<Array>} Array of online users
  */
 export async function getOnlineUsers() {
-    const onlineRef = ref(db, PATHS.ONLINE);
-    const snapshot = await get(onlineRef);
-    
-    if (!snapshot.exists()) return [];
-    
-    const onlineUsers = snapshot.val();
-    return Object.entries(onlineUsers)
-        .map(([id, data]) => ({ id, ...data }));
+    try {
+        const onlineRef = ref(db, PATHS.ONLINE);
+        const snapshot = await get(onlineRef);
+        
+        if (!snapshot.exists()) {
+            console.log('[Database] No online users found');
+            return [];
+        }
+        
+        const onlineUsers = snapshot.val();
+        const usersArray = Object.entries(onlineUsers)
+            .map(([id, data]) => ({ id, ...data }));
+        console.log('[Database] Online users found:', usersArray.length, usersArray);
+        return usersArray;
+    } catch (error) {
+        console.error('[Database] Error getting online users:', error);
+        return [];
+    }
 }
 
 /**

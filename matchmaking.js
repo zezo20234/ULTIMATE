@@ -13,7 +13,8 @@ import {
     setUserOffline,
     updateUserLastSeen,
     getUserSquad,
-    getUserClub
+    getUserClub,
+    getOnlineUsers
 } from './database.js';
 import { initializeMatch } from './match.js';
 
@@ -65,16 +66,6 @@ export function startMatchmaking(matchType) {
     matchmakingState.searchStartTime = Date.now();
     matchmakingState.currentUserId = currentUser.uid;
 
-    // Set user as online
-    setUserOnline(currentUser.uid);
-    
-    // Start keep-alive interval
-    matchmakingState.keepAliveInterval = setInterval(() => {
-        updateUserLastSeen(currentUser.uid);
-    }, MATCHMAKING_CONFIG.ONLINE_KEEP_ALIVE_INTERVAL);
-
-    showSearchingUI(matchType);
-
     if (matchType === 'friend') {
         startFriendMatchmaking();
     } else {
@@ -89,26 +80,21 @@ async function startRankedOrUnrankedMatchmaking(matchType) {
     console.log(`[Matchmaking] Starting ${matchType} matchmaking`);
 
     try {
-        // Create queue entry using database function
-        const squadData = {
-            rating: window.userProfile?.squad?.rating || 75,
-            playerCount: Object.keys(window.userProfile?.squad?.starters || {}).length,
-            clubName: window.userProfile?.profile?.clubName || 'Unknown'
-        };
+        // Set user as online
+        await setUserOnline(matchmakingState.currentUserId);
         
-        matchmakingState.queueId = await joinMatchmakingQueue(
-            matchmakingState.currentUserId, 
-            matchType, 
-            squadData
-        );
+        // Start keep-alive interval
+        matchmakingState.keepAliveInterval = setInterval(() => {
+            updateUserLastSeen(matchmakingState.currentUserId);
+        }, MATCHMAKING_CONFIG.ONLINE_KEEP_ALIVE_INTERVAL);
         
-        console.log('[Matchmaking] Added to queue');
+        showSearchingUI(matchType);
         startSearchTimer();
-        listenForMatchFound();
+        startOpponentSearch();
     } catch (error) {
-        console.error('[Matchmaking] Failed to join queue:', error);
+        console.error('[Matchmaking] Failed to start matchmaking:', error);
         cancelMatchmaking();
-        window.showToast('Failed to join matchmaking queue.', 'error');
+        window.showToast('Failed to start matchmaking.', 'error');
     }
 }
 
@@ -119,26 +105,20 @@ async function startFriendMatchmaking() {
     console.log('[Matchmaking] Starting friend matchmaking');
 
     try {
-        // Create queue entry using database function
-        const squadData = {
-            rating: window.userProfile?.squad?.rating || 75,
-            playerCount: Object.keys(window.userProfile?.squad?.starters || {}).length,
-            waitingForFriend: true,
-            clubName: window.userProfile?.profile?.clubName || 'Unknown'
-        };
+        // Set user as online
+        await setUserOnline(matchmakingState.currentUserId);
         
-        matchmakingState.queueId = await joinMatchmakingQueue(
-            matchmakingState.currentUserId, 
-            'friend', 
-            squadData
-        );
+        // Start keep-alive interval
+        matchmakingState.keepAliveInterval = setInterval(() => {
+            updateUserLastSeen(matchmakingState.currentUserId);
+        }, MATCHMAKING_CONFIG.ONLINE_KEEP_ALIVE_INTERVAL);
         
-        console.log('[Matchmaking] Added to friend queue');
-        startFriendSearchCheck();
+        showSearchingUI('friend');
+        startFriendSearch();
     } catch (error) {
-        console.error('[Matchmaking] Failed to join friend queue:', error);
+        console.error('[Matchmaking] Failed to start friend matchmaking:', error);
         cancelMatchmaking();
-        window.showToast('Failed to join friend queue.', 'error');
+        window.showToast('Failed to start friend matchmaking.', 'error');
     }
 }
 
@@ -157,138 +137,115 @@ function startSearchTimer() {
         if (timeLeft <= 0) {
             // Time elapsed - fallback to AI
             clearInterval(matchmakingState.searchTimer);
+            clearInterval(matchmakingState.matchListener);
+            clearInterval(matchmakingState.keepAliveInterval);
             fallbackToAI();
         }
     }, 1000);
 }
 
 /**
- * Start friend search check
+ * Start friend search - randomly pick from online users
  */
-function startFriendSearchCheck() {
+function startFriendSearch() {
     updateSearchStatus('Waiting for friend to join...');
 
-    matchmakingState.friendCheckInterval = setInterval(() => {
-        checkForFriendMatch();
+    matchmakingState.friendCheckInterval = setInterval(async () => {
+        try {
+            const onlineUsers = await getOnlineUsers();
+            console.log('[Matchmaking] Online users for friend match:', onlineUsers.length);
+            
+            // Filter out current user
+            const potentialFriends = onlineUsers.filter(user => 
+                user.userId !== matchmakingState.currentUserId
+            );
+
+            console.log('[Matchmaking] Potential friends:', potentialFriends.length);
+
+            if (potentialFriends.length > 0) {
+                // Randomly pick a friend
+                const randomFriend = potentialFriends[Math.floor(Math.random() * potentialFriends.length)];
+                console.log('[Matchmaking] Found random online friend:', randomFriend.clubName);
+                
+                // Fetch friend's squad data
+                const friendSquad = await getUserSquad(randomFriend.userId);
+                const friendClub = await getUserClub(randomFriend.userId);
+                
+                if (!friendSquad) {
+                    console.error('[Matchmaking] Failed to fetch friend squad');
+                    return; // Keep searching
+                }
+
+                // Convert friend squad instanceIds to actual player data
+                const friendSquadWithPlayers = {};
+                if (friendSquad.starters) {
+                    Object.entries(friendSquad.starters).forEach(([key, starter]) => {
+                        const instanceId = starter.instanceId;
+                        if (instanceId && friendClub && friendClub[instanceId]) {
+                            friendSquadWithPlayers[key] = friendClub[instanceId];
+                        } else if (starter.name) {
+                            // Already has player data
+                            friendSquadWithPlayers[key] = starter;
+                        }
+                    });
+                }
+                
+                const fullFriendSquad = {
+                    ...friendSquad,
+                    starters: friendSquadWithPlayers
+                };
+
+                // Stop friend check
+                if (matchmakingState.friendCheckInterval) {
+                    clearInterval(matchmakingState.friendCheckInterval);
+                }
+
+                // Stop keep-alive
+                if (matchmakingState.keepAliveInterval) {
+                    clearInterval(matchmakingState.keepAliveInterval);
+                }
+
+                // Start match
+                hideSearchingUI();
+                startMatchWithRealOpponent({
+                    id: `friend_match_${Date.now()}`,
+                    opponentId: randomFriend.userId,
+                    opponentName: randomFriend.clubName || 'Friend',
+                    opponentSquad: fullFriendSquad
+                });
+            }
+        } catch (error) {
+            console.error('[Matchmaking] Error checking for friend match:', error);
+        }
     }, MATCHMAKING_CONFIG.FRIEND_SEARCH_CHECK_INTERVAL);
 }
 
 /**
- * Check for friend match
+ * Start opponent search - randomly pick from online users
  */
-async function checkForFriendMatch() {
-    try {
-        const queue = await getMatchmakingQueue('friend');
-        
-        const friendQueues = queue.filter(entry => 
-            entry.userId !== matchmakingState.currentUserId &&
-            entry.squadData?.waitingForFriend
-        );
-
-        if (friendQueues.length > 0) {
-            // Found a friend - match with them
-            const friendData = friendQueues[0];
-            createFriendMatch(friendData.id, friendData);
-        }
-    } catch (error) {
-        console.error('[Matchmaking] Error checking for friend match:', error);
-    }
-}
-
-/**
- * Create friend match
- */
-async function createFriendMatch(friendQueueId, friendData) {
-    console.log('[Matchmaking] Friend match found!');
-
-    try {
-        // Remove both from queue
-        await leaveMatchmakingQueue(matchmakingState.queueId);
-        await leaveMatchmakingQueue(friendQueueId);
-
-        // Stop friend check
-        if (matchmakingState.friendCheckInterval) {
-            clearInterval(matchmakingState.friendCheckInterval);
-        }
-
-        // Stop keep-alive
-        if (matchmakingState.keepAliveInterval) {
-            clearInterval(matchmakingState.keepAliveInterval);
-        }
-
-        // Fetch opponent's squad data
-        const opponentSquad = await getUserSquad(friendData.userId);
-        const opponentClub = await getUserClub(friendData.userId);
-        
-        if (!opponentSquad) {
-            console.error('[Matchmaking] Failed to fetch opponent squad');
-            window.showToast('Failed to load opponent squad. Falling back to AI.', 'error');
-            startMatchWithAI('friend');
-            return;
-        }
-
-        // Convert opponent squad instanceIds to actual player data
-        const opponentSquadWithPlayers = {};
-        if (opponentSquad.starters) {
-            Object.entries(opponentSquad.starters).forEach(([key, starter]) => {
-                const instanceId = starter.instanceId;
-                if (instanceId && opponentClub && opponentClub[instanceId]) {
-                    opponentSquadWithPlayers[key] = opponentClub[instanceId];
-                } else if (starter.name) {
-                    // Already has player data
-                    opponentSquadWithPlayers[key] = starter;
-                }
-            });
-        }
-        
-        const fullOpponentSquad = {
-            ...opponentSquad,
-            starters: opponentSquadWithPlayers
-        };
-
-        // Create match entry
-        const matchId = await createMatch(
-            matchmakingState.currentUserId,
-            friendData.userId,
-            'friend'
-        );
-
-        console.log('[Matchmaking] Friend match created');
-        hideSearchingUI();
-        
-        // Start match with real opponent
-        startMatchWithRealOpponent({
-            id: matchId,
-            opponentId: friendData.userId,
-            opponentName: friendData.clubName || 'Friend',
-            opponentSquad: fullOpponentSquad
-        });
-    } catch (error) {
-        console.error('[Matchmaking] Failed to create friend match:', error);
-        window.showToast('Failed to create friend match.', 'error');
-        cancelMatchmaking();
-    }
-}
-
-/**
- * Listen for match found
- */
-function listenForMatchFound() {
-    // Simplified: periodic check instead of real-time listener
+function startOpponentSearch() {
+    updateSearchStatus('Searching for online opponents...');
+    
     matchmakingState.matchListener = setInterval(async () => {
         try {
-            const opponent = await findMatchOpponent(
-                matchmakingState.currentUserId,
-                matchmakingState.matchType,
-                window.userProfile?.squad?.rating || 75
+            const onlineUsers = await getOnlineUsers();
+            console.log('[Matchmaking] Online users found:', onlineUsers.length);
+            
+            // Filter out current user
+            const potentialOpponents = onlineUsers.filter(user => 
+                user.userId !== matchmakingState.currentUserId
             );
 
-            if (opponent) {
-                console.log('[Matchmaking] Opponent found!');
+            console.log('[Matchmaking] Potential opponents:', potentialOpponents.length);
+
+            if (potentialOpponents.length > 0) {
+                // Randomly pick an opponent
+                const randomOpponent = potentialOpponents[Math.floor(Math.random() * potentialOpponents.length)];
+                console.log('[Matchmaking] Found random online opponent:', randomOpponent.clubName);
                 
                 // Fetch opponent's squad data
-                const opponentSquad = await getUserSquad(opponent.userId);
-                const opponentClub = await getUserClub(opponent.userId);
+                const opponentSquad = await getUserSquad(randomOpponent.userId);
+                const opponentClub = await getUserClub(randomOpponent.userId);
                 
                 if (!opponentSquad) {
                     console.error('[Matchmaking] Failed to fetch opponent squad');
@@ -314,18 +271,6 @@ function listenForMatchFound() {
                     starters: opponentSquadWithPlayers
                 };
 
-                // Create match
-                const matchId = await createMatch(
-                    matchmakingState.currentUserId,
-                    opponent.userId,
-                    matchmakingState.matchType
-                );
-
-                // Remove from queue
-                if (matchmakingState.queueId) {
-                    await leaveMatchmakingQueue(matchmakingState.queueId);
-                }
-
                 // Stop search timer
                 if (matchmakingState.searchTimer) {
                     clearInterval(matchmakingState.searchTimer);
@@ -344,14 +289,14 @@ function listenForMatchFound() {
                 // Start match
                 hideSearchingUI();
                 startMatchWithRealOpponent({
-                    id: matchId,
-                    opponentId: opponent.userId,
-                    opponentName: opponent.clubName || 'Opponent',
+                    id: `match_${Date.now()}`,
+                    opponentId: randomOpponent.userId,
+                    opponentName: randomOpponent.clubName || 'Opponent',
                     opponentSquad: fullOpponentSquad
                 });
             }
         } catch (error) {
-            console.error('[Matchmaking] Error checking for opponent:', error);
+            console.error('[Matchmaking] Error searching for opponent:', error);
         }
     }, 2000);
 }
@@ -361,11 +306,6 @@ function listenForMatchFound() {
  */
 async function fallbackToAI() {
     console.log('[Matchmaking] No opponent found, falling back to AI');
-    
-    // Remove from queue
-    if (matchmakingState.queueId) {
-        await leaveMatchmakingQueue(matchmakingState.queueId);
-    }
 
     // Stop listeners
     if (matchmakingState.matchListener) {
@@ -568,15 +508,6 @@ export async function cancelMatchmaking() {
     // Stop listeners
     if (matchmakingState.matchListener) {
         clearInterval(matchmakingState.matchListener);
-    }
-
-    // Remove from queue
-    if (matchmakingState.queueId) {
-        try {
-            await leaveMatchmakingQueue(matchmakingState.queueId);
-        } catch (error) {
-            console.error('[Matchmaking] Error leaving queue:', error);
-        }
     }
 
     // Set user offline

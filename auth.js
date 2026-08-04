@@ -83,7 +83,13 @@ export async function loginUser(email, password) {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         
         // Set user as online
-        await setUserOnline(userCredential.user.uid);
+        try {
+            await setUserOnline(userCredential.user.uid);
+            console.log('[Auth] User set as online after login');
+        } catch (error) {
+            console.error('[Auth] Error setting user online after login:', error);
+            // Don't fail login if online status fails
+        }
         
         return { success: true, user: userCredential.user, error: null };
     } catch (error) {
@@ -100,7 +106,13 @@ export async function logoutUser() {
     try {
         const currentUser = auth.currentUser;
         if (currentUser) {
-            await setUserOffline(currentUser.uid);
+            try {
+                await setUserOffline(currentUser.uid);
+                console.log('[Auth] User set as offline after logout');
+            } catch (error) {
+                console.error('[Auth] Error setting user offline after logout:', error);
+                // Don't fail logout if offline status fails
+            }
         }
         await signOut(auth);
         return { success: true, error: null };
@@ -139,7 +151,13 @@ export function initAuthStateListener(onLogin, onLogout) {
         if (user) {
             console.log(`[Auth API] Session active for: ${user.email} (${user.uid})`);
             // Set user as online when session is restored
-            await setUserOnline(user.uid);
+            try {
+                await setUserOnline(user.uid);
+                console.log('[Auth] User set as online on session restore');
+            } catch (error) {
+                console.error('[Auth] Error setting user online on session restore:', error);
+                // Don't fail session restore if online status fails
+            }
             if (typeof onLogin === 'function') onLogin(user);
         } else {
             console.log('[Auth API] No active session. User is logged out.');

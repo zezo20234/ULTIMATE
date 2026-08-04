@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import { initAuthStateListener, logoutUser, loginUser, registerUser } from './auth.js';
-import { getUserProfile, listenToUserCoins, getStorePacks, initializePackStore, setUserOnline, setUserOffline } from './database.js';
+import { getUserProfile, listenToUserCoins, getStorePacks, initializePackStore, setUserOnline, setUserOffline, getOnlineUsers } from './database.js';
 import { loadPlayerDatabase, renderPlayerCard, searchPlayers } from './players.js';
 import { buyAndOpenPack, playPackAnimation } from './packs.js';
 import { searchMarket, buyNow } from './market.js';
@@ -89,6 +89,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Fetch profile data
             userProfile = await getUserProfile(user.uid);
             window.userProfile = userProfile; // Make available globally for match system
+            
+            // Ensure user is set as online
+            try {
+                await setUserOnline(user.uid);
+                console.log('[App Controller] User set as online after login');
+            } catch (error) {
+                console.error('[App Controller] Error setting user online:', error);
+            }
             
             // Give starter pack if not received yet
             if (userProfile && !userProfile.hasReceivedStarterPack) {
@@ -253,6 +261,13 @@ async function refreshAllData() {
                 // Refresh matchmaking data
                 updateRankDisplay();
                 checkExistingQueue();
+                updateOnlineUsersDisplay();
+                // Set user as online when on matchmaking screen
+                if (currentUser) {
+                    setUserOnline(currentUser.uid).catch(error => {
+                        console.error('[App Controller] Error setting user online:', error);
+                    });
+                }
             } else if (screenId === 'match-screen') {
                 // Refresh match data - reload profile but don't interrupt match
                 console.log('[App Controller] Refreshing during match - profile updated only');
@@ -1551,6 +1566,9 @@ function initMatchmakingScreen() {
     // Check for existing queue
     checkExistingQueue();
     
+    // Update online users display
+    updateOnlineUsersDisplay();
+    
     // Bind matchmaking buttons
     const rankedBtn = document.querySelector('.ranked-btn');
     const unrankedBtn = document.querySelector('.unranked-btn');
@@ -1599,6 +1617,41 @@ function initMatchScreen() {
             document.getElementById('match-results-overlay').classList.add('hidden');
             switchScreen('dashboard');
         });
+    }
+}
+
+/**
+ * Update online users display in matchmaking screen
+ */
+async function updateOnlineUsersDisplay() {
+    const onlineUsersList = document.getElementById('online-users-list');
+    if (!onlineUsersList) return;
+
+    try {
+        const onlineUsers = await getOnlineUsers();
+        
+        if (onlineUsers.length === 0) {
+            onlineUsersList.innerHTML = '<p class="text-muted">No users online</p>';
+            return;
+        }
+
+        const currentUserId = currentUser?.uid;
+        const otherUsers = onlineUsers.filter(user => user.userId !== currentUserId);
+
+        if (otherUsers.length === 0) {
+            onlineUsersList.innerHTML = '<p class="text-muted">You are the only one online</p>';
+            return;
+        }
+
+        onlineUsersList.innerHTML = otherUsers.slice(0, 5).map(user => `
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <div style="width: 8px; height: 8px; background: var(--fc-neon); border-radius: 50%;"></div>
+                <span style="font-size: 0.9rem;">${user.clubName || 'Unknown'}</span>
+            </div>
+        `).join('') + (otherUsers.length > 5 ? `<p class="text-muted" style="font-size: 0.8rem;">+${otherUsers.length - 5} more</p>` : '');
+    } catch (error) {
+        console.error('[App Controller] Error updating online users display:', error);
+        onlineUsersList.innerHTML = '<p class="text-muted">Error loading online users</p>';
     }
 }
 
