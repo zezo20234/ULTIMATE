@@ -3107,6 +3107,120 @@ header {
     flex: 1;
 }
 
+/* ==========================================================================
+   FRIENDS SYSTEM STYLES
+   ========================================================================== */
+
+.friends-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.friends-header {
+    margin-bottom: 2rem;
+}
+
+.friends-header h2 {
+    color: var(--fc-neon);
+    font-family: 'Oswald', sans-serif;
+    margin-bottom: 0.5rem;
+}
+
+.friends-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.friends-section {
+    background: var(--bg-secondary);
+    border-radius: var(--sharp-radius);
+    padding: 1.5rem;
+}
+
+.friends-section h3 {
+    color: var(--text-main);
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+}
+
+.add-friend-form {
+    display: flex;
+    gap: 1rem;
+}
+
+.add-friend-form input {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--sharp-radius);
+    color: var(--text-main);
+}
+
+.add-friend-form input:focus {
+    outline: none;
+    border-color: var(--fc-neon);
+}
+
+.friend-request-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--sharp-radius);
+    margin-bottom: 0.5rem;
+}
+
+.friend-request-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.friend-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--sharp-radius);
+    margin-bottom: 0.5rem;
+}
+
+.friend-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.friend-name {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.friend-status {
+    font-size: 0.85rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 12px;
+}
+
+.friend-status.online {
+    background: var(--fc-neon);
+    color: var(--bg-main);
+}
+
+.friend-status.offline {
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+}
+
+.friend-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
 .goal-area-right {
     right: 0;
     border-right: none;

@@ -23,6 +23,9 @@
     
     <!-- Premium Stylesheet -->
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- Scripts -->
+    <script type="module" src="friends.js"></script>
 </head>
 <body>
 
@@ -53,6 +56,7 @@
             <button class="nav-btn" data-target-screen="market"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfers</button>
             <button class="nav-btn" data-target-screen="club"><i class="fa-solid fa-users"></i> Club</button>
             <button class="nav-btn" data-target-screen="squad"><i class="fa-solid fa-people-group"></i> Squad</button>
+            <button class="nav-btn" data-target-screen="friends"><i class="fa-solid fa-user-group"></i> Friends</button>
             <button class="nav-btn" data-target-screen="matchmaking"><i class="fa-solid fa-futbol"></i> Play</button>
             <button class="nav-btn" data-target-screen="admin"><i class="fa-solid fa-cog"></i> Admin</button>
         </nav>
@@ -628,7 +632,46 @@
     </main>
 
     <!-- ==========================================================================
-       SCREEN 9: MATCHMAKING
+       SCREEN 9: FRIENDS
+       ========================================================================== -->
+    <main id="friends-screen" class="app-screen hidden">
+        <div class="friends-container">
+            <div class="friends-header">
+                <h2>Friends</h2>
+                <p class="text-muted">Add friends and play matches together</p>
+            </div>
+            
+            <div class="friends-sections">
+                <!-- Friend Requests -->
+                <div class="friends-section">
+                    <h3>Friend Requests</h3>
+                    <div id="friend-requests-list">
+                        <p class="text-muted">No pending friend requests</p>
+                    </div>
+                </div>
+                
+                <!-- Add Friend -->
+                <div class="friends-section">
+                    <h3>Add Friend</h3>
+                    <div class="add-friend-form">
+                        <input type="text" id="friend-email-input" class="search-input" placeholder="Enter friend's email" />
+                        <button id="send-friend-request-btn" class="btn btn-primary">Send Request</button>
+                    </div>
+                </div>
+                
+                <!-- Friends List -->
+                <div class="friends-section">
+                    <h3>My Friends</h3>
+                    <div id="friends-list">
+                        <p class="text-muted">No friends yet. Add some friends to play with!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ==========================================================================
+       SCREEN 10: MATCHMAKING
        ========================================================================== -->
     <main id="matchmaking-screen" class="app-screen hidden">
         <div class="matchmaking-container">
@@ -665,16 +708,6 @@
                     <div class="btn-content">
                         <h3>Unranked</h3>
                         <p>Play without rank pressure</p>
-                    </div>
-                </button>
-                
-                <button class="matchmaking-btn friend-btn" data-match-type="friend">
-                    <div class="btn-icon">
-                        <i class="fa-solid fa-user-group"></i>
-                    </div>
-                    <div class="btn-content">
-                        <h3>Friend</h3>
-                        <p>Play with a friend</p>
                     </div>
                 </button>
             </div>

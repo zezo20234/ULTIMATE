@@ -6,6 +6,7 @@
 
 import { initAuthStateListener, logoutUser, loginUser, registerUser } from './auth.js';
 import { getUserProfile, listenToUserCoins, getStorePacks, initializePackStore, setUserOnline, setUserOffline, getOnlineUsers, onOnlineUsersChanged } from './database.js';
+import { sendFriendRequest, getFriendRequests, acceptFriendRequest, declineFriendRequest, getFriends, sendMatchInvite } from './friends.js';
 import { loadPlayerDatabase, renderPlayerCard, searchPlayers } from './players.js';
 import { buyAndOpenPack, playPackAnimation } from './packs.js';
 import { searchMarket, buyNow } from './market.js';
@@ -30,6 +31,7 @@ const screens = {
     market: document.getElementById('market-screen'),
     club: document.getElementById('club-screen'),
     squad: document.getElementById('squad-screen'),
+    friends: document.getElementById('friends-screen'),
     matchmaking: document.getElementById('matchmaking-screen'),
     match: document.getElementById('match-screen'),
     admin: document.getElementById('admin-screen')
@@ -353,6 +355,7 @@ function switchScreen(screenName) {
     if (screenName === 'market') initMarketScreen();
     if (screenName === 'club') initClubScreen();
     if (screenName === 'squad') initSquadBuilder();
+    if (screenName === 'friends') initFriendsScreen();
     if (screenName === 'matchmaking') initMatchmakingScreen();
     if (screenName === 'match') initMatchScreen();
     if (screenName === 'admin') initAdminScreen();
@@ -1507,16 +1510,136 @@ function initMatchmakingScreen() {
         });
     }
     
-    if (friendBtn) {
-        friendBtn.addEventListener('click', () => {
-            startMatchmaking('friend');
-        });
-    }
+
     
     if (cancelBtn) {
         cancelBtn.addEventListener('click', () => {
             cancelMatchmaking();
         });
+    }
+}
+
+/* ==========================================================================
+   FRIENDS SCREEN INITIALIZATION
+   ========================================================================== */
+
+function initFriendsScreen() {
+    console.log('[App Controller] Initializing friends screen...');
+    
+    // Bind send friend request button
+    const sendRequestBtn = document.getElementById('send-friend-request-btn');
+    if (sendRequestBtn) {
+        sendRequestBtn.addEventListener('click', sendFriendRequestHandler);
+    }
+    
+    // Load friend requests and friends list
+    loadFriendRequestsHandler();
+    loadFriendsListHandler();
+}
+
+async function sendFriendRequestHandler() {
+    const emailInput = document.getElementById('friend-email-input');
+    const email = emailInput.value.trim();
+    
+    if (!email) {
+        window.showToast('Please enter an email address', 'error');
+        return;
+    }
+    
+    try {
+        const success = await sendFriendRequest(currentUser.uid, email);
+        
+        if (success) {
+            window.showToast('Friend request sent!', 'success');
+            emailInput.value = '';
+        } else {
+            window.showToast('Failed to send friend request', 'error');
+        }
+    } catch (error) {
+        console.error('[App Controller] Error sending friend request:', error);
+        window.showToast('Error sending friend request', 'error');
+    }
+}
+
+async function loadFriendRequestsHandler() {
+    try {
+        const requests = await getFriendRequests(currentUser.uid);
+        
+        const requestsList = document.getElementById('friend-requests-list');
+        if (!requestsList) return;
+        
+        if (requests.length === 0) {
+            requestsList.innerHTML = '<p class="text-muted">No pending friend requests</p>';
+            return;
+        }
+        
+        requestsList.innerHTML = requests.map(request => '<div class="friend-request-item"><span>' + request.fromEmail + '</span><div class="friend-request-actions"><button class="btn btn-primary btn-sm accept-request" data-from="' + request.fromId + '">Accept</button><button class="btn btn-secondary btn-sm decline-request" data-from="' + request.fromId + '">Decline</button></div></div>').join('');
+        
+        // Bind accept/decline buttons
+        document.querySelectorAll('.accept-request').forEach(btn => {
+            btn.addEventListener('click', () => acceptFriendRequestHandler(btn.dataset.from));
+        });
+        
+        document.querySelectorAll('.decline-request').forEach(btn => {
+            btn.addEventListener('click', () => declineFriendRequestHandler(btn.dataset.from));
+        });
+    } catch (error) {
+        console.error('[App Controller] Error loading friend requests:', error);
+    }
+}
+
+async function acceptFriendRequestHandler(fromId) {
+    try {
+        await acceptFriendRequest(currentUser.uid, fromId);
+        window.showToast('Friend request accepted!', 'success');
+        loadFriendRequestsHandler();
+        loadFriendsListHandler();
+    } catch (error) {
+        console.error('[App Controller] Error accepting friend request:', error);
+        window.showToast('Error accepting friend request', 'error');
+    }
+}
+
+async function declineFriendRequestHandler(fromId) {
+    try {
+        await declineFriendRequest(currentUser.uid, fromId);
+        window.showToast('Friend request declined', 'info');
+        loadFriendRequestsHandler();
+    } catch (error) {
+        console.error('[App Controller] Error declining friend request:', error);
+    }
+}
+
+async function loadFriendsListHandler() {
+    try {
+        const friends = await getFriends(currentUser.uid);
+        
+        const friendsList = document.getElementById('friends-list');
+        if (!friendsList) return;
+        
+        if (friends.length === 0) {
+            friendsList.innerHTML = '<p class="text-muted">No friends yet. Add some friends to play with!</p>';
+            return;
+        }
+        
+        friendsList.innerHTML = friends.map(friend => '<div class="friend-item"><div class="friend-info"><span class="friend-name">' + (friend.clubName || 'Unknown') + '</span><span class="friend-status ' + (friend.online ? 'online' : 'offline') + '">' + (friend.online ? 'Online' : 'Offline') + '</span></div><div class="friend-actions"><button class="btn btn-primary btn-sm invite-match" data-friend-id="' + friend.id + '">Invite to Match</button></div></div>').join('');
+        
+        // Bind invite buttons
+        document.querySelectorAll('.invite-match').forEach(btn => {
+            btn.addEventListener('click', () => inviteFriendToMatchHandler(btn.dataset.friendId));
+        });
+    } catch (error) {
+        console.error('[App Controller] Error loading friends list:', error);
+    }
+}
+
+async function inviteFriendToMatchHandler(friendId) {
+    try {
+        await sendMatchInvite(currentUser.uid, friendId);
+        window.showToast('Match invitation sent!', 'success');
+    } catch (error) {
+        console.error('[App Controller] Error sending match invite:', error);
+        window.showToast('Error sending match invitation', 'error');
     }
 }
 
