@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import { initAuthStateListener, logoutUser, loginUser, registerUser } from './auth.js';
-import { getUserProfile, listenToUserCoins, getStorePacks, initializePackStore, setUserOnline, setUserOffline, getOnlineUsers } from './database.js';
+import { getUserProfile, listenToUserCoins, getStorePacks, initializePackStore, setUserOnline, setUserOffline, getOnlineUsers, onOnlineUsersChanged } from './database.js';
 import { loadPlayerDatabase, renderPlayerCard, searchPlayers } from './players.js';
 import { buyAndOpenPack, playPackAnimation } from './packs.js';
 import { searchMarket, buyNow } from './market.js';
@@ -20,6 +20,7 @@ let currentUser = null;
 let userProfile = null;
 let coinListenerUnsub = null;
 let dataRefreshInterval = null;
+let onlineUsersUnsub = null;
 
 // DOM Element References Cache
 const screens = {
@@ -46,117 +47,130 @@ const clubNameDisplays = document.querySelectorAll('.user-club-name');
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[App Controller] Initializing Ultimate Team Application...');
     
-    // Register Service Worker for PWA
-    if ('serviceWorker' in navigator) {
-        try {
-            await navigator.serviceWorker.register('./service-worker.js');
-            console.log('[App Controller] Service Worker registered');
-        } catch (error) {
-            console.log('[App Controller] Service Worker registration failed:', error);
-        }
-    }
-    
-    // 1. Preload the master player database from Firebase or local cache
-    const loaded = await loadPlayerDatabase();
-    if (!loaded) {
-        showToast('Warning: Failed to load master player database. Some features may break.', 'error');
-    }
-
-    // 2. Initialize pack store if needed
-    await initializePackStore();
-
-    // 3. Seed database with initial data
-    await seedDatabase();
-
-    // 4. Start AI market activity
-    startAIMarketActivity();
-
-    // 5. Start maintenance tasks
-    startMaintenanceTasks();
-
-    // 6. Initialize Auth State Listener
-    initAuthStateListener(
-        async (user) => {
-            // ON LOGIN
-            currentUser = user;
-            window.currentUser = user; // Make available globally for match system
-            window.userProfile = null; // Reset profile
-            console.log(`[App Controller] Authenticated as: ${user.uid}`);
-            
-            // Show header nav
-            if (appHeader) appHeader.classList.remove('hidden');
-
-            // Fetch profile data
-            userProfile = await getUserProfile(user.uid);
-            window.userProfile = userProfile; // Make available globally for match system
-            
-            // Ensure user is set as online
+    try {
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
             try {
-                await setUserOnline(user.uid);
-                console.log('[App Controller] User set as online after login');
+                await navigator.serviceWorker.register('./service-worker.js');
+                console.log('[App Controller] Service Worker registered');
             } catch (error) {
-                console.error('[App Controller] Error setting user online:', error);
+                console.log('[App Controller] Service Worker registration failed:', error);
             }
-            
-            // Give starter pack if not received yet
-            if (userProfile && !userProfile.hasReceivedStarterPack) {
-                const { giveStarterPack } = await import('./database.js');
-                await giveStarterPack(user.uid);
-                // Reload profile after giving pack
-                userProfile = await getUserProfile(user.uid);
-                window.userProfile = userProfile;
-            }
-            
-            // Setup real-time listeners for coins
-            if (coinListenerUnsub) coinListenerUnsub();
-            coinListenerUnsub = listenToUserCoins(user.uid, (newCoins) => {
-                if (userProfile && userProfile.economy) {
-                    userProfile.economy.coins = newCoins;
-                }
-                updateCoinUI(newCoins);
-            });
-
-            updateHeaderUI();
-            switchScreen('dashboard');
-            
-            // Start periodic data refresh
-            startDataRefresh();
-        },
-        () => {
-            // ON LOGOUT
-            currentUser = null;
-            userProfile = null;
-            if (coinListenerUnsub) coinListenerUnsub();
-            
-            // Stop data refresh
-            stopDataRefresh();
-            
-            // Hide header nav
-            if (appHeader) appHeader.classList.add('hidden');
-            
-            switchScreen('auth');
         }
-    );
+        
+        // 1. Preload the master player database from Firebase or local cache
+        const loaded = await loadPlayerDatabase();
+        if (!loaded) {
+            showToast('Warning: Failed to load master player database. Some features may break.', 'error');
+        }
 
-    // 7. Bind Global UI Events & Listeners
-    bindAuthForms();
-    bindNavigationEvents();
-    bindGlobalEvents();
-    
-    // 8. Check for existing matchmaking queue
-    checkExistingQueue();
-    
-    // 9. Simulate loading progress
-    simulateLoadingProgress();
-    
-    // 10. Hide initial loader after loading completes
-    setTimeout(() => {
+        // 2. Initialize pack store if needed
+        await initializePackStore();
+
+        // 3. Seed database with initial data
+        await seedDatabase();
+
+        // 4. Start AI market activity
+        startAIMarketActivity();
+
+        // 5. Start maintenance tasks
+        startMaintenanceTasks();
+
+        // 6. Initialize Auth State Listener
+        initAuthStateListener(
+            async (user) => {
+                // ON LOGIN
+                currentUser = user;
+                window.currentUser = user; // Make available globally for match system
+                window.userProfile = null; // Reset profile
+                console.log('[App Controller] Authenticated as: ' + user.uid);
+                
+                // Show header nav
+                if (appHeader) appHeader.classList.remove('hidden');
+
+                // Fetch profile data
+                userProfile = await getUserProfile(user.uid);
+                window.userProfile = userProfile; // Make available globally for match system
+                
+                // Ensure user is set as online
+                try {
+                    await setUserOnline(user.uid);
+                    console.log('[App Controller] User set as online after login');
+                } catch (error) {
+                    console.error('[App Controller] Error setting user online:', error);
+                }
+                
+                // Give starter pack if not received yet
+                if (userProfile && !userProfile.hasReceivedStarterPack) {
+                    const { giveStarterPack } = await import('./database.js');
+                    await giveStarterPack(user.uid);
+                    // Reload profile after giving pack
+                    userProfile = await getUserProfile(user.uid);
+                    window.userProfile = userProfile;
+                }
+                
+                // Setup real-time listeners for coins
+                if (coinListenerUnsub) coinListenerUnsub();
+                coinListenerUnsub = listenToUserCoins(user.uid, (newCoins) => {
+                    if (userProfile && userProfile.economy) {
+                        userProfile.economy.coins = newCoins;
+                    }
+                    updateCoinUI(newCoins);
+                });
+
+                updateHeaderUI();
+                switchScreen('dashboard');
+                
+                // Start periodic data refresh
+                startDataRefresh();
+            },
+            () => {
+                // ON LOGOUT
+                currentUser = null;
+                userProfile = null;
+                if (coinListenerUnsub) coinListenerUnsub();
+                
+                // Stop data refresh
+                stopDataRefresh();
+                
+                // Hide header nav
+                if (appHeader) appHeader.classList.add('hidden');
+                
+                switchScreen('auth');
+            }
+        );
+
+        // 7. Bind Global UI Events & Listeners
+        bindAuthForms();
+        bindNavigationEvents();
+        bindGlobalEvents();
+        
+        // 8. Check for existing matchmaking queue
+        checkExistingQueue();
+        
+        // 9. Simulate loading progress
+        simulateLoadingProgress();
+        
+        // 10. Hide initial loader after loading completes (reduced timeout)
+        setTimeout(() => {
+            const loader = document.getElementById('initial-loader');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 500);
+            }
+            console.log('[App Controller] Loader hidden');
+        }, 1000);
+    } catch (error) {
+        console.error('[App Controller] Error during initialization:', error);
+        showToast('Error loading application. Please refresh.', 'error');
+        
+        // Force hide loader on error
         const loader = document.getElementById('initial-loader');
         if (loader) {
             loader.style.opacity = '0';
             setTimeout(() => loader.remove(), 500);
         }
-    }, 3000);
+    }
 });
 
 // Handle window close/tab close - set user offline
@@ -351,6 +365,7 @@ function switchScreen(screenName) {
     // Cancel matchmaking when leaving matchmaking screen
     if (screenName !== 'matchmaking') {
         cancelMatchmaking();
+        stopOnlineUsersMonitoring();
     }
 }
 
@@ -508,21 +523,7 @@ function createPackCard(pack) {
         card.classList.add('featured');
     }
 
-    card.innerHTML = `
-        <div class="pack-art">
-            <i class="fa-solid fa-box-open"></i>
-        </div>
-        <div class="pack-info">
-            <h3>${pack.name}</h3>
-            <div class="pack-odds">${pack.description || `${pack.items} players`}</div>
-            <div class="pack-price">
-                <i class="fa-solid fa-coins"></i> ${formatCoins(pack.cost)}
-            </div>
-        </div>
-        <button class="btn btn-primary w-100 open-pack-btn" data-pack-id="${pack.id}">
-            Open Pack
-        </button>
-    `;
+    card.innerHTML = '<div class="pack-art"><i class="fa-solid fa-box-open"></i></div><div class="pack-info"><h3>' + pack.name + '</h3><div class="pack-odds">' + (pack.description || pack.items + ' players') + '</div><div class="pack-price"><i class="fa-solid fa-coins"></i> ' + formatCoins(pack.cost) + '</div></div><button class="btn btn-primary w-100 open-pack-btn" data-pack-id="' + pack.id + '">Open Pack</button>';
 
     // Bind open pack button
     const openBtn = card.querySelector('.open-pack-btn');
@@ -564,7 +565,7 @@ async function handlePackOpen(pack) {
                 overlay.innerHTML = '';
             }, 5000);
             
-            showToast(`Opened ${pack.name}! Got ${result.items.length} players.`, 'success');
+            showToast('Opened ' + pack.name + '! Got ' + result.items.length + ' players.', 'success');
             
             // Refresh club screen if currently viewing it
             const clubScreen = document.getElementById('club-screen');
@@ -601,7 +602,7 @@ async function initMarketScreen() {
             
             // Show selected tab content
             const tabName = tab.dataset.tab;
-            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
             
             // Load content for selected tab
             if (tabName === 'search') {
@@ -667,20 +668,13 @@ function createMarketListing(listing) {
     const playerCard = renderPlayerCard(listing.player, { showPrice: false });
     const timeRemaining = Math.max(0, Math.floor((listing.expiresAt - Date.now()) / 1000 / 60)); // minutes
 
-    card.innerHTML = `
-        <div class="listing-info">
-            <span class="listing-seller">${listing.sellerType === 'ai' ? 'AI Club' : 'User'}</span>
-            <span class="listing-time">${timeRemaining}m</span>
-        </div>
-    `;
+    card.innerHTML = '<div class="listing-info"><span class="listing-seller">' + (listing.sellerType === 'ai' ? 'AI Club' : 'User') + '</span><span class="listing-time">' + timeRemaining + 'm</span></div>';
 
     card.appendChild(playerCard);
 
     const priceDiv = document.createElement('div');
     priceDiv.className = 'market-item-prices';
-    priceDiv.innerHTML = `
-        <div><span>Buy Now:</span> <strong><i class="fa-solid fa-coins"></i> ${formatCoins(listing.buyNowPrice)}</strong></div>
-    `;
+    priceDiv.innerHTML = '<div><span>Buy Now:</span> <strong><i class="fa-solid fa-coins"></i> ' + formatCoins(listing.buyNowPrice) + '</strong></div>';
     card.appendChild(priceDiv);
 
     // Add buy button
@@ -775,21 +769,13 @@ function createMyListingCard(listing) {
     const playerCard = renderPlayerCard(listing.player, { showPrice: false });
     const timeRemaining = Math.max(0, Math.floor((listing.expiresAt - Date.now()) / 1000 / 60)); // minutes
 
-    card.innerHTML = `
-        <div class="listing-info">
-            <span class="listing-status">Active</span>
-            <span class="listing-time">${timeRemaining}m remaining</span>
-        </div>
-    `;
+    card.innerHTML = '<div class="listing-info"><span class="listing-status">Active</span><span class="listing-time">' + timeRemaining + 'm remaining</span></div>';
 
     card.appendChild(playerCard);
 
     const priceDiv = document.createElement('div');
     priceDiv.className = 'market-item-prices';
-    priceDiv.innerHTML = `
-        <div><span>Start Price:</span> <strong><i class="fa-solid fa-coins"></i> ${formatCoins(listing.startPrice)}</strong></div>
-        <div><span>Buy Now:</span> <strong><i class="fa-solid fa-coins"></i> ${formatCoins(listing.buyNowPrice)}</strong></div>
-    `;
+    priceDiv.innerHTML = '<div><span>Start Price:</span> <strong><i class="fa-solid fa-coins"></i> ' + formatCoins(listing.startPrice) + '</strong></div><div><span>Buy Now:</span> <strong><i class="fa-solid fa-coins"></i> ' + formatCoins(listing.buyNowPrice) + '</strong></div>';
     card.appendChild(priceDiv);
 
     // Add cancel listing button
@@ -822,9 +808,9 @@ async function handleCancelListing(listingId) {
 
         // Return player to club
         const updates = {};
-        updates[`users/${currentUser.uid}/club/${listing.player.instanceId}`] = listing.player;
-        updates[`market/${listingId}/status`] = 'cancelled';
-        updates[`market/${listingId}/cancelledAt`] = Date.now();
+        updates['users/' + currentUser.uid + '/club/' + listing.player.instanceId] = listing.player;
+        updates['market/' + listingId + '/status'] = 'cancelled';
+        updates['market/' + listingId + '/cancelledAt'] = Date.now();
 
         await updateMultipath(updates);
         
@@ -944,23 +930,7 @@ function showPlayerActions(player) {
     // Create a simple modal for player actions
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal">
-            <div class="modal-header">
-                <h3 class="modal-title">${player.name}</h3>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-                    ${renderPlayerCard(player, { showPrice: false }).outerHTML}
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                    <button class="btn btn-secondary quick-sell-btn">Quick Sell (${formatCoins(player.quickSellValue)})</button>
-                    <button class="btn btn-secondary list-market-btn">List on Market</button>
-                </div>
-            </div>
-        </div>
-    `;
+    modal.innerHTML = '<div class="modal"><div class="modal-header"><h3 class="modal-title">' + player.name + '</h3><button class="modal-close">&times;</button></div><div class="modal-body"><div style="display: flex; gap: 1rem; margin-bottom: 1rem;">' + renderPlayerCard(player, { showPrice: false }).outerHTML + '</div><div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;"><button class="btn btn-secondary quick-sell-btn">Quick Sell (' + formatCoins(player.quickSellValue) + ')</button><button class="btn btn-secondary list-market-btn">List on Market</button></div></div></div>';
 
     document.body.appendChild(modal);
 
@@ -979,7 +949,7 @@ function showPlayerActions(player) {
 
         const success = await quickSellPlayer(currentUser.uid, player.instanceId, player.quickSellValue);
         if (success) {
-            showToast(`Quick sold ${player.name} for ${formatCoins(player.quickSellValue)}!`, 'success');
+            showToast('Quick sold ' + player.name + ' for ' + formatCoins(player.quickSellValue) + '!', 'success');
             
             // Reload user profile to get updated club
             const { getUserProfile } = await import('./database.js');
@@ -1004,35 +974,7 @@ function showPlayerActions(player) {
         // Show listing price modal
         const listingModal = document.createElement('div');
         listingModal.className = 'modal-overlay';
-        listingModal.innerHTML = `
-            <div class="modal">
-                <div class="modal-header">
-                    <h3 class="modal-title">List ${player.name} on Market</h3>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem;">Start Price:</label>
-                        <input type="number" id="start-price" class="search-input w-100" value="${Math.floor(player.quickSellValue * 1.5)}" min="0">
-                    </div>
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem;">Buy Now Price:</label>
-                        <input type="number" id="buy-now-price" class="search-input w-100" value="${Math.floor(player.quickSellValue * 2)}" min="0">
-                    </div>
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem;">Duration (hours):</label>
-                        <select id="listing-duration" class="search-input w-100">
-                            <option value="1">1 Hour</option>
-                            <option value="6">6 Hours</option>
-                            <option value="12">12 Hours</option>
-                            <option value="24" selected>24 Hours</option>
-                            <option value="48">48 Hours</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary w-100" id="confirm-list-btn">List Player</button>
-                </div>
-            </div>
-        `;
+        listingModal.innerHTML = '<div class="modal"><div class="modal-header"><h3 class="modal-title">List ' + player.name + ' on Market</h3><button class="modal-close">&times;</button></div><div class="modal-body"><div style="margin-bottom: 1rem;"><label style="display: block; margin-bottom: 0.5rem;">Start Price:</label><input type="number" id="start-price" class="search-input w-100" value="' + Math.floor(player.quickSellValue * 1.5) + '" min="0"></div><div style="margin-bottom: 1rem;"><label style="display: block; margin-bottom: 0.5rem;">Buy Now Price:</label><input type="number" id="buy-now-price" class="search-input w-100" value="' + Math.floor(player.quickSellValue * 2) + '" min="0"></div><div style="margin-bottom: 1rem;"><label style="display: block; margin-bottom: 0.5rem;">Duration (hours):</label><select id="listing-duration" class="search-input w-100"><option value="1">1 Hour</option><option value="6">6 Hours</option><option value="12">12 Hours</option><option value="24" selected>24 Hours</option><option value="48">48 Hours</option></select></div><button class="btn btn-primary w-100" id="confirm-list-btn">List Player</button></div></div>';
 
         document.body.appendChild(listingModal);
 
@@ -1053,7 +995,7 @@ function showPlayerActions(player) {
 
             try {
                 await listPlayerOnMarket(currentUser.uid, player, startPrice, buyNowPrice, duration, 'user');
-                showToast(`${player.name} listed on market!`, 'success');
+                showToast(player.name + ' listed on market!', 'success');
                 
                 // Reload user profile to get updated club
                 const { getUserProfile } = await import('./database.js');
@@ -1278,8 +1220,8 @@ function renderFormation() {
     formation.forEach((pos) => {
         const slot = document.createElement('div');
         slot.className = 'position-slot';
-        slot.style.left = `${pos.x}%`;
-        slot.style.top = `${pos.y}%`;
+        slot.style.left = pos.x + '%';
+        slot.style.top = pos.y + '%';
         slot.dataset.position = pos.position;
         slot.dataset.key = pos.key;
         slot.dataset.index = formation.indexOf(pos);
@@ -1288,19 +1230,10 @@ function renderFormation() {
 
         if (player) {
             slot.classList.add('filled');
-            slot.innerHTML = `
-                <div class="position-player-card">
-                    <div class="player-rating">${player.rating}</div>
-                    <div class="player-name">${player.name}</div>
-                    <div class="player-position">${player.position}</div>
-                </div>
-            `;
+            slot.innerHTML = '<div class="position-player-card"><div class="player-rating">' + player.rating + '</div><div class="player-name">' + player.name + '</div><div class="player-position">' + player.position + '</div></div>';
         } else {
             slot.classList.add('empty');
-            slot.innerHTML = `
-                <span class="position-label">${pos.position}</span>
-                <span class="add-icon"><i class="fa-solid fa-plus"></i></span>
-            `;
+            slot.innerHTML = '<span class="position-label">' + pos.position + '</span><span class="add-icon"><i class="fa-solid fa-plus"></i></span>';
             slot.addEventListener('click', () => openPlayerSelector(pos.position, pos.key, slot));
         }
 
@@ -1316,7 +1249,7 @@ function updateSquadStats() {
     const totalRating = Object.values(currentSquad).reduce((sum, p) => sum + p.rating, 0);
     const avgRating = playerCount > 0 ? Math.round(totalRating / playerCount) : 0;
 
-    document.getElementById('player-count').textContent = `${playerCount}/11`;
+    document.getElementById('player-count').textContent = playerCount + '/11';
     document.getElementById('squad-rating').textContent = avgRating;
 }
 
@@ -1324,17 +1257,7 @@ function updateSquadStats() {
 function openPlayerSelector(position, key, slot) {
     const modal = document.createElement('div');
     modal.className = 'player-modal';
-    modal.innerHTML = `
-        <div class="player-modal-content">
-            <div class="player-modal-header">
-                <h3>Select ${position}</h3>
-                <button class="player-modal-close">&times;</button>
-            </div>
-            <div class="player-modal-body">
-                <div class="player-grid" id="player-grid"></div>
-            </div>
-        </div>
-    `;
+    modal.innerHTML = '<div class="player-modal-content"><div class="player-modal-header"><h3>Select ' + position + '</h3><button class="player-modal-close">&times;</button></div><div class="player-modal-body"><div class="player-grid" id="player-grid"></div></div></div>';
 
     document.body.appendChild(modal);
 
@@ -1390,11 +1313,7 @@ function openPlayerSelector(position, key, slot) {
     availablePlayers.forEach(player => {
         const card = document.createElement('div');
         card.className = 'modal-player-card';
-        card.innerHTML = `
-            <div class="rating">${player.rating}</div>
-            <div class="name">${player.name}</div>
-            <div class="position">${player.position}</div>
-        `;
+        card.innerHTML = '<div class="rating">' + player.rating + '</div><div class="name">' + player.name + '</div><div class="position">' + player.position + '</div>';
         card.addEventListener('click', () => {
             currentSquad[key] = player;
             renderFormation();
@@ -1535,11 +1454,11 @@ function updateRankDisplay() {
     const nextRankPoints = getPointsForRank(currentRank + 1);
     
     document.getElementById('user-rank-display').textContent = currentRank;
-    document.getElementById('user-rank-display').className = `rank-badge ${getRankClass(currentRank)}`;
+    document.getElementById('user-rank-display').className = 'rank-badge ' + getRankClass(currentRank);
     document.getElementById('user-rank-points').textContent = currentPoints;
     document.getElementById('next-rank-points').textContent = nextRankPoints;
     
-    console.log(`[App Controller] Rank display updated: ${currentPoints}/${nextRankPoints} (${currentRank})`);
+    console.log('[App Controller] Rank display updated: ' + currentPoints + '/' + nextRankPoints + ' (' + currentRank + ')');
 }
 
 // Make updateRankDisplay available globally for match.js
@@ -1566,8 +1485,9 @@ function initMatchmakingScreen() {
     // Check for existing queue
     checkExistingQueue();
     
-    // Update online users display
+    // Update online users display and start real-time monitoring
     updateOnlineUsersDisplay();
+    startOnlineUsersMonitoring();
     
     // Bind matchmaking buttons
     const rankedBtn = document.querySelector('.ranked-btn');
@@ -1643,15 +1563,52 @@ async function updateOnlineUsersDisplay() {
             return;
         }
 
-        onlineUsersList.innerHTML = otherUsers.slice(0, 5).map(user => `
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                <div style="width: 8px; height: 8px; background: var(--fc-neon); border-radius: 50%;"></div>
-                <span style="font-size: 0.9rem;">${user.clubName || 'Unknown'}</span>
-            </div>
-        `).join('') + (otherUsers.length > 5 ? `<p class="text-muted" style="font-size: 0.8rem;">+${otherUsers.length - 5} more</p>` : '');
+        onlineUsersList.innerHTML = otherUsers.slice(0, 5).map(user => '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><div style="width: 8px; height: 8px; background: var(--fc-neon); border-radius: 50%;"></div><span style="font-size: 0.9rem;">' + (user.clubName || 'Unknown') + '</span></div>').join('') + (otherUsers.length > 5 ? '<p class="text-muted" style="font-size: 0.8rem;">+' + (otherUsers.length - 5) + ' more</p>' : '');
     } catch (error) {
         console.error('[App Controller] Error updating online users display:', error);
         onlineUsersList.innerHTML = '<p class="text-muted">Error loading online users</p>';
+    }
+}
+
+/**
+ * Start real-time online users monitoring
+ */
+function startOnlineUsersMonitoring() {
+    // Clear existing listener if any
+    if (onlineUsersUnsub && typeof onlineUsersUnsub === 'function') {
+        onlineUsersUnsub();
+    }
+    
+    const onlineUsersList = document.getElementById('online-users-list');
+    if (!onlineUsersList) return;
+    
+    onlineUsersUnsub = onOnlineUsersChanged((onlineUsers) => {
+        if (!onlineUsersList) return;
+        
+        if (onlineUsers.length === 0) {
+            onlineUsersList.innerHTML = '<p class="text-muted">No users online</p>';
+            return;
+        }
+
+        const currentUserId = currentUser?.uid;
+        const otherUsers = onlineUsers.filter(user => user.userId !== currentUserId);
+
+        if (otherUsers.length === 0) {
+            onlineUsersList.innerHTML = '<p class="text-muted">You are the only one online</p>';
+            return;
+        }
+
+        onlineUsersList.innerHTML = otherUsers.slice(0, 5).map(user => '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;"><div style="width: 8px; height: 8px; background: var(--fc-neon); border-radius: 50%;"></div><span style="font-size: 0.9rem;">' + (user.clubName || 'Unknown') + '</span></div>').join('') + (otherUsers.length > 5 ? '<p class="text-muted" style="font-size: 0.8rem;">+' + (otherUsers.length - 5) + ' more</p>' : '');
+    });
+}
+
+/**
+ * Stop online users monitoring
+ */
+function stopOnlineUsersMonitoring() {
+    if (onlineUsersUnsub && typeof onlineUsersUnsub === 'function') {
+        onlineUsersUnsub();
+        onlineUsersUnsub = null;
     }
 }
 
@@ -1670,7 +1627,7 @@ async function initAdminScreen() {
             item.classList.add('active');
 
             document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
-            document.getElementById(`admin-${section}`).classList.add('active');
+            document.getElementById('admin-' + section).classList.add('active');
 
             // Load section data
             if (section === 'players') loadAdminPlayers();
@@ -1752,17 +1709,7 @@ async function loadAdminPlayers() {
         playersList.innerHTML = '';
         allPlayers.results.forEach(player => {
             const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${player.id}</td>
-                <td>${player.name}</td>
-                <td>${player.rating}</td>
-                <td>${player.position}</td>
-                <td>${player.rarity}</td>
-                <td>
-                    <button class="btn btn-secondary admin-edit-player" data-player-id="${player.id}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Edit</button>
-                    <button class="btn btn-danger admin-delete-player" data-player-id="${player.id}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Delete</button>
-                </td>
-            `;
+            row.innerHTML = '<td>' + player.id + '</td><td>' + player.name + '</td><td>' + player.rating + '</td><td>' + player.position + '</td><td>' + player.rarity + '</td><td><button class="btn btn-secondary admin-edit-player" data-player-id="' + player.id + '" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Edit</button><button class="btn btn-danger admin-delete-player" data-player-id="' + player.id + '" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Delete</button></td>';
             playersList.appendChild(row);
         });
 
@@ -1798,16 +1745,7 @@ async function loadAdminPacks() {
         packsList.innerHTML = '';
         Object.values(packs).forEach(pack => {
             const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${pack.id}</td>
-                <td>${pack.name}</td>
-                <td>${formatCoins(pack.cost)}</td>
-                <td>${pack.items}</td>
-                <td>
-                    <button class="btn btn-secondary admin-edit-pack" data-pack-id="${pack.id}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Edit</button>
-                    <button class="btn btn-danger admin-delete-pack" data-pack-id="${pack.id}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Delete</button>
-                </td>
-            `;
+            row.innerHTML = '<td>' + pack.id + '</td><td>' + pack.name + '</td><td>' + formatCoins(pack.cost) + '</td><td>' + pack.items + '</td><td><button class="btn btn-secondary admin-edit-pack" data-pack-id="' + pack.id + '" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Edit</button><button class="btn btn-danger admin-delete-pack" data-pack-id="' + pack.id + '" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Delete</button></td>';
             packsList.appendChild(row);
         });
 

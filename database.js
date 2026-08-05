@@ -688,6 +688,10 @@ export async function setUserOnline(userId) {
             clubName: window.userProfile?.profile?.clubName || 'Unknown'
         };
         await set(onlineRef, onlineData);
+        
+        // Set up disconnect handler to automatically remove user when connection is lost
+        onDisconnect(onlineRef).remove();
+        
         console.log('[Database] User set as online:', userId, onlineData.clubName);
         return true;
     } catch (error) {
@@ -697,12 +701,47 @@ export async function setUserOnline(userId) {
 }
 
 /**
- * Set user as offline
+ * Set user as offline (explicit cleanup)
  * @param {string} userId - User ID
  * @returns {Promise<void>}
  */
 export async function setUserOffline(userId) {
-    await remove(ref(db, `${PATHS.ONLINE}/${userId}`));
+    try {
+        const onlineRef = ref(db, `${PATHS.ONLINE}/${userId}`);
+        await remove(onlineRef);
+        console.log('[Database] User set as offline:', userId);
+    } catch (error) {
+        console.error('[Database] Error setting user offline:', error);
+    }
+}
+
+/**
+ * Clean up stale online users (users who haven't been seen in 5 minutes)
+ * @returns {Promise<void>}
+ */
+export async function cleanupStaleOnlineUsers() {
+    try {
+        const onlineRef = ref(db, PATHS.ONLINE);
+        const snapshot = await get(onlineRef);
+        
+        if (!snapshot.exists()) return;
+        
+        const onlineUsers = snapshot.val();
+        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+        
+        const staleUsers = Object.entries(onlineUsers)
+            .filter(([id, data]) => data.lastSeen < fiveMinutesAgo)
+            .map(([id]) => id);
+        
+        console.log('[Database] Found stale users:', staleUsers.length);
+        
+        for (const userId of staleUsers) {
+            await remove(ref(db, `${PATHS.ONLINE}/${userId}`));
+            console.log('[Database] Removed stale user:', userId);
+        }
+    } catch (error) {
+        console.error('[Database] Error cleaning up stale users:', error);
+    }
 }
 
 /**
@@ -738,6 +777,28 @@ export async function getOnlineUsers() {
         console.error('[Database] Error getting online users:', error);
         return [];
     }
+}
+
+/**
+ * Listen to online users changes in real-time
+ * @param {Function} callback - Callback function with online users array
+ * @returns {Function} Unsubscribe function
+ */
+export function onOnlineUsersChanged(callback) {
+    const onlineRef = ref(db, PATHS.ONLINE);
+    
+    const unsubscribe = onValue(onlineRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const onlineUsers = snapshot.val();
+            const usersArray = Object.entries(onlineUsers)
+                .map(([id, data]) => ({ id, ...data }));
+            callback(usersArray);
+        } else {
+            callback([]);
+        }
+    });
+    
+    return unsubscribe;
 }
 
 /**
@@ -1330,7 +1391,7 @@ export async function setMatchStatus(matchId, status) {
  * @param {Object} results - Match results
  * @returns {Promise<void>}
  */
-export async function completeMatch(matchId, results) {
+export async function completeMatchAndSaveResults(matchId, results) {
     const matchData = await getMatchData(matchId);
     if (!matchData) return;
     

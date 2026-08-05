@@ -2847,6 +2847,266 @@ header {
     border-left: none;
 }
 
+/* ==========================================================================
+   LOBBY SYSTEM STYLES
+   ========================================================================== */
+
+.lobby-system {
+    background: var(--bg-secondary);
+    border-radius: var(--sharp-radius);
+    padding: 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.lobby-system h2 {
+    color: var(--fc-neon);
+    font-family: 'Oswald', sans-serif;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.lobby-tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.lobby-tabs button {
+    flex: 1;
+    padding: 1rem;
+    border: 2px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-main);
+    border-radius: var(--sharp-radius);
+    cursor: pointer;
+    transition: var(--transition-fast);
+    font-weight: 600;
+}
+
+.lobby-tabs button:hover {
+    border-color: var(--fc-neon);
+    background: var(--bg-secondary);
+}
+
+.lobby-tabs button.active {
+    background: var(--fc-neon);
+    color: var(--bg-main);
+    border-color: var(--fc-neon);
+}
+
+.lobby-content {
+    min-height: 300px;
+}
+
+.create-lobby-form,
+.join-lobby-form {
+    text-align: center;
+}
+
+.create-lobby-form h3,
+.join-lobby-form h3 {
+    color: var(--text-main);
+    margin-bottom: 0.5rem;
+}
+
+.form-info {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin: 1.5rem 0;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+}
+
+.info-item i {
+    font-size: 1.5rem;
+    color: var(--fc-neon);
+}
+
+.input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.input-group input {
+    flex: 1;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--sharp-radius);
+    color: var(--text-main);
+    font-size: 1rem;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--fc-neon);
+}
+
+.lobby-room {
+    background: var(--bg-tertiary);
+    border-radius: var(--sharp-radius);
+    padding: 1.5rem;
+}
+
+.lobby-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.lobby-header h3 {
+    color: var(--text-main);
+    font-family: 'Oswald', sans-serif;
+}
+
+.lobby-status {
+    font-size: 0.9rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+}
+
+.lobby-status.waiting {
+    color: var(--warning);
+}
+
+.lobby-status.full {
+    color: var(--fc-neon);
+}
+
+.lobby-code-section {
+    background: var(--bg-secondary);
+    border-radius: var(--sharp-radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.code-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.code-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.code-display code {
+    background: var(--bg-main);
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--sharp-radius);
+    font-family: 'Courier New', monospace;
+    font-size: 1.25rem;
+    color: var(--fc-neon);
+    border: 2px solid var(--fc-neon);
+    letter-spacing: 2px;
+}
+
+.lobby-players-section {
+    margin-bottom: 1.5rem;
+}
+
+.lobby-players-section h4 {
+    color: var(--text-main);
+    margin-bottom: 1rem;
+}
+
+.lobby-players {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.lobby-player {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--sharp-radius);
+    border: 2px solid transparent;
+    transition: var(--transition-fast);
+}
+
+.lobby-player.ready {
+    border-color: var(--fc-neon);
+}
+
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.player-avatar {
+    width: 40px;
+    height: 40px;
+    background: var(--bg-tertiary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--fc-neon);
+}
+
+.player-details {
+    text-align: left;
+}
+
+.player-name {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.player-squad-rating {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.status-badge.ready {
+    background: var(--fc-neon);
+    color: var(--bg-main);
+}
+
+.status-badge.not-ready {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+}
+
+.lobby-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.lobby-actions button {
+    flex: 1;
+}
+
 .goal-area-right {
     right: 0;
     border-right: none;

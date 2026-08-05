@@ -241,7 +241,7 @@ function generateAITeam(aiTemplate) {
         const ratingVar = Math.floor(Math.random() * 10) - 5;
         const baseRating = aiTemplate.rating + ratingVar;
         const player = {
-            id: `ai_${index}`,
+            id: 'ai_' + index,
             name: generateAIPlayerName(pos),
             rating: Math.max(60, Math.min(99, baseRating)),
             position: pos,
@@ -275,7 +275,7 @@ function generateAITeam(aiTemplate) {
 function generateAIPlayerName(position) {
     const firstNames = ['Carlos', 'Marco', 'Luis', 'Andre', 'Paulo', 'Rafael', 'Bruno', 'Diego', 'Lucas', 'Gabriel'];
     const lastNames = ['Silva', 'Santos', 'Oliveira', 'Souza', 'Rodrigues', 'Ferreira', 'Almeida', 'Costa', 'Pereira', 'Carvalho'];
-    return `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
+    return firstNames[Math.floor(Math.random() * firstNames.length)] + ' ' + lastNames[Math.floor(Math.random() * lastNames.length)];
 }
 
 /**
@@ -328,21 +328,23 @@ function resetMatchState() {
 /**
  * Initialize real-time multiplayer match
  */
-async function initializeRealTimeMatch(opponent) {
-    console.log('[Match Engine] Initializing real-time match:', opponent);
-    
-    const sharedMatchState = window.sharedMatchState;
-    const playerNum = window.currentPlayerNum;
+async function initializeRealTimeMatch(sharedMatchState) {
+    console.log('[Match Engine] Initializing real-time match with shared state:', sharedMatchState);
     
     if (!sharedMatchState) {
         console.error('[Match Engine] No shared match state found');
         return false;
     }
     
+    // Determine which player we are
+    const currentUser = window.currentUser;
+    const playerNum = sharedMatchState.player1.userId === currentUser.uid ? 'player1' : 'player2';
+    
     // Set real-time flags
     matchState.isRealTime = true;
-    matchState.sharedMatchId = opponent.matchId;
+    matchState.sharedMatchId = sharedMatchState.matchId;
     matchState.playerNum = playerNum;
+    matchState.opponentId = playerNum === 'player1' ? sharedMatchState.player2.userId : sharedMatchState.player1.userId;
     
     // Determine which team is home/away based on player number
     const mySquad = playerNum === 'player1' ? sharedMatchState.player1.squad : sharedMatchState.player2.squad;
@@ -363,14 +365,17 @@ async function initializeRealTimeMatch(opponent) {
         }
     });
     
+    const myClubName = playerNum === 'player1' ? sharedMatchState.player1.clubName : sharedMatchState.player2.clubName;
+    const opponentClubName = playerNum === 'player1' ? sharedMatchState.player2.clubName : sharedMatchState.player1.clubName;
+    
     matchState.homeTeam = generateTeamFromSquad(
         myStartersWithPlayerData, 
-        window.userProfile?.profile?.clubName || 'My Club'
+        myClubName || 'My Club'
     );
     
     matchState.awayTeam = generateTeamFromSquad(
         opponentStartersWithPlayerData, 
-        playerNum === 'player1' ? sharedMatchState.player2.userId : sharedMatchState.player1.userId
+        opponentClubName || 'Opponent'
     );
     
     // Reset match state
@@ -379,16 +384,17 @@ async function initializeRealTimeMatch(opponent) {
     // Sync initial state from Firebase
     matchState.homeScore = sharedMatchState.player1.score || 0;
     matchState.awayScore = sharedMatchState.player2.score || 0;
-    matchState.currentMinute = sharedMatchState.currentMinute || 0;
+    matchState.currentTime = sharedMatchState.currentMinute || 0;
+    matchState.isRanked = sharedMatchState.matchType === 'ranked';
     
     // Set up real-time listener
-    const unsubscribe = listenToMatchState(opponent.matchId, (updatedState) => {
+    const unsubscribe = listenToMatchState(sharedMatchState.matchId, (updatedState) => {
         console.log('[Match Engine] Match state updated:', updatedState);
         
         // Sync scores
         matchState.homeScore = updatedState.player1.score || 0;
         matchState.awayScore = updatedState.player2.score || 0;
-        matchState.currentMinute = updatedState.currentMinute || 0;
+        matchState.currentTime = updatedState.currentMinute || 0;
         
         // Process new events
         if (updatedState.events && updatedState.events.length > (matchState.commentary.length || 0)) {
@@ -406,13 +412,18 @@ async function initializeRealTimeMatch(opponent) {
             newGoals.forEach(goal => {
                 matchState.goals.push(goal);
                 // Show goal celebration
-                showGoalCelebration(goal);
+                showGoalCelebrationRT(goal);
             });
         }
         
         // Update UI
         updateScoreboard();
         updateMatchTime();
+        
+        // Check if match is complete
+        if (updatedState.status === 'completed') {
+            endRealTimeMatch(updatedState);
+        }
     });
     
     // Store unsubscribe function for cleanup
@@ -439,15 +450,78 @@ function showWaitingForMatchStart() {
     const matchScreen = document.getElementById('match-screen');
     if (!matchScreen) return;
     
-    const waitingHTML = `
-        <div class="waiting-screen" style="text-align: center; padding: 2rem;">
-            <h2>Waiting for Opponent to Ready Up...</h2>
-            <div class="loading-spinner" style="margin: 1rem auto;"></div>
-            <p class="text-muted">Match will start when both players are ready</p>
-        </div>
-    `;
+    const waitingHTML = '<div class="waiting-screen" style="text-align: center; padding: 2rem;"><h2>Waiting for Opponent to Ready Up...</h2><div class="loading-spinner" style="margin: 1rem auto;"></div><p class="text-muted">Match will start when both players are ready</p></div>';
     
-    // Insert waiting screen before field
+    // Insert waiting screen
+    const existingWaiting = matchScreen.querySelector('.waiting-screen');
+    if (existingWaiting) {
+        existingWaiting.remove();
+    }
+    
+    matchScreen.insertAdjacentHTML('afterbegin', waitingHTML);
+}
+
+/**
+ * Start real-time game loop
+ */
+function startRealTimeGameLoop() {
+    console.log('[Match Engine] Starting real-time game loop');
+    
+    // Remove waiting screen if exists
+    const waitingScreen = document.querySelector('.waiting-screen');
+    if (waitingScreen) {
+        waitingScreen.remove();
+    }
+    
+    // Start the normal match but with real-time synchronization
+    matchState.isRunning = true;
+    matchState.realStartTime = Date.now();
+    
+    // Start match intervals
+    startMatchIntervals();
+    
+    // Show match screen
+    document.getElementById('match-screen').classList.remove('hidden');
+}
+
+/**
+ * End real-time match
+ */
+function endRealTimeMatch(finalState) {
+    console.log('[Match Engine] Ending real-time match:', finalState);
+    
+    // Stop match intervals
+    stopMatchIntervals();
+    
+    // Unsubscribe from match state
+    if (matchState.matchStateUnsubscribe) {
+        matchState.matchStateUnsubscribe();
+        matchState.matchStateUnsubscribe = null;
+    }
+    
+    // Show match results
+    showMatchResults(finalState);
+}
+
+/**
+ * Show goal celebration for real-time match
+ */
+function showGoalCelebrationRT(goal) {
+    const goalBanner = document.getElementById('goal-banner');
+    if (!goalBanner) return;
+    
+    goalBanner.querySelector('.goal-scorer').textContent = goal.scorer;
+    goalBanner.querySelector('.goal-assist').textContent = 'Assist: ' + (goal.assist || 'None');
+    goalBanner.querySelector('.goal-minute').textContent = goal.minute + "'";
+    
+    goalBanner.classList.remove('hidden');
+    
+    setTimeout(() => {
+        goalBanner.classList.add('hidden');
+    }, MATCH_CONFIG.GOAL_CELEBRATION_DURATION);
+}
+
+// Insert waiting screen before field
     const field = matchScreen.querySelector('.match-field');
     if (field) {
         field.insertAdjacentHTML('beforebegin', waitingHTML);
@@ -524,7 +598,7 @@ function generateRandomMatchEvent() {
     const team = Math.random() > 0.5 ? 'home' : 'away';
     const event = {
         type: eventType,
-        description: `${eventType.toUpperCase()} - ${team === 'home' ? matchState.homeTeam.name : matchState.awayTeam.name}`,
+        description: eventType.toUpperCase() + ' - ' + (team === 'home' ? matchState.homeTeam.name : matchState.awayTeam.name),
         minute: minute,
         team: team
     };
@@ -537,7 +611,7 @@ function generateRandomMatchEvent() {
         if (eventType === 'goal') {
             const scoringPlayer = team === 'home' ? 'player1' : 'player2';
             addMatchGoal(matchState.sharedMatchId, scoringPlayer, {
-                description: `Goal by ${team === 'home' ? matchState.homeTeam.name : matchState.awayTeam.name}!`,
+                description: 'Goal by ' + (team === 'home' ? matchState.homeTeam.name : matchState.awayTeam.name) + '!',
                 minute: minute
             });
         }
@@ -567,25 +641,20 @@ function addCommentaryToDisplay(text, type) {
     
     const item = document.createElement('div');
     item.className = 'commentary-item';
-    item.innerHTML = `<span class="commentary-minute">${matchState.currentMinute}'</span> ${text}`;
+    item.innerHTML = '<span class="commentary-minute">' + matchState.currentMinute + "'</span> " + text;
     
     commentaryFeed.appendChild(item);
     commentaryFeed.scrollTop = commentaryFeed.scrollHeight;
 }
 
 /**
- * Show goal celebration
+ * Show goal celebration (for real-time multiplayer)
  */
-function showGoalCelebration(goal) {
+function showGoalCelebrationRT(goal) {
     const goalOverlay = document.getElementById('goal-celebration');
     if (!goalOverlay) return;
     
-    goalOverlay.innerHTML = `
-        <div class="goal-celebration">
-            <h2>⚽ GOAL!</h2>
-            <p>${goal.description || 'Goal scored!'}</p>
-        </div>
-    `;
+    goalOverlay.innerHTML = '<div class="goal-celebration"><h2>⚽ GOAL!</h2><p>' + (goal.description || 'Goal scored!') + '</p></div>';
     
     goalOverlay.classList.remove('hidden');
     
@@ -816,11 +885,11 @@ function handleAttack(attackingTeam, defendingTeam) {
         handleShot(attackingTeam, defendingTeam);
     } else if (attackSuccess > -5) {
         // Attack breaks down
-        addCommentary(`${attackingTeam.name}'s attack breaks down.`);
+        addCommentary(attackingTeam.name + "'s attack breaks down.");
         handlePossessionChange();
     } else {
         // Attack countered
-        addCommentary(`${defendingTeam.name} counters the attack!`);
+        addCommentary(defendingTeam.name + ' counters the attack!');
         handlePossessionChange();
         updateMomentum(-0.2);
     }
@@ -864,10 +933,10 @@ function handlePass(team) {
     
     if (passSuccess) {
         const color = isHome ? 'blue' : 'red';
-        addCommentary(`Good pass by <span class="${color}">${passer.name}</span>.`);
+        addCommentary('Good pass by <span class="' + color + '">' + passer.name + '</span>.');
     } else {
         const color = isHome ? 'blue' : 'red';
-        addCommentary(`Pass misplaced by <span class="${color}">${passer.name}</span>.`);
+        addCommentary('Pass misplaced by <span class="' + color + '">' + passer.name + '</span>.');
         handlePossessionChange();
     }
 }
@@ -890,7 +959,7 @@ function handleThroughBall(attackingTeam, defendingTeam) {
     const isHome = matchState.possession === 'home';
     
     if (Math.random() < 0.15) {
-        addCommentary(`Through ball - OFFSIDE!`);
+        addCommentary('Through ball - OFFSIDE!');
         handlePossessionChange();
         return;
     }
@@ -899,10 +968,10 @@ function handleThroughBall(attackingTeam, defendingTeam) {
     
     if (passSuccess) {
         const color = isHome ? 'blue' : 'red';
-        addCommentary(`Dangerous through ball by <span class="${color}">${passer.name}</span>!`);
+        addCommentary('Dangerous through ball by <span class="' + color + '">' + passer.name + '</span>!');
         updateMomentum(0.1);
     } else {
-        addCommentary(`Through ball intercepted.`);
+        addCommentary('Through ball intercepted.');
         handlePossessionChange();
     }
 }
@@ -915,7 +984,7 @@ function handleCross(attackingTeam, defendingTeam) {
     const isHome = matchState.possession === 'home';
     const color = isHome ? 'blue' : 'red';
     
-    addCommentary(`Cross into the box by <span class="${color}">${crosser.name}</span>.`);
+    addCommentary('Cross into the box by <span class="' + color + '">' + crosser.name + '</span>.');
     
     // 40% chance of header shot (auto-shot for headers)
     if (Math.random() < 0.4) {
@@ -926,7 +995,7 @@ function handleCross(attackingTeam, defendingTeam) {
             handleCorner(attackingTeam);
         } else {
             // Cleared
-            addCommentary(`Cross cleared by defense.`);
+            addCommentary('Cross cleared by defense.');
             handlePossessionChange();
         }
     }
@@ -937,7 +1006,7 @@ function handleCross(attackingTeam, defendingTeam) {
  */
 function handleCounterAttack(attackingTeam, defendingTeam) {
     showAttackBanner(attackingTeam.name + " (Counter)");
-    addCommentary(`Counter attack by ${attackingTeam.name}!`);
+    addCommentary('Counter attack by ' + attackingTeam.name + '!');
     updateMomentum(0.15);
     
     // Counter attacks are more likely to result in shots
@@ -981,16 +1050,16 @@ function handleShot(attackingTeam, defendingTeam, isHeader = false, isPenalty = 
         }
         
         if (shotResult.isGoal) {
-            addCommentary(`SHOT by <span class="${color}">${shooter.name}</span>! GOAL!`);
+            addCommentary('SHOT by <span class="' + color + '">' + shooter.name + '</span>! GOAL!');
             handleGoal(shooter, null);
         } else {
             const goalkeeper = getGoalkeeper(defendingTeam);
             const gkColor = !isHome ? 'blue' : 'red';
-            addCommentary(`SHOT by <span class="${color}">${shooter.name}</span>! Saved by <span class="${gkColor}">${goalkeeper.name}</span>!`);
+            addCommentary('SHOT by <span class="' + color + '">' + shooter.name + '</span>! Saved by <span class="' + gkColor + '">' + goalkeeper.name + '</span>!');
             handlePossessionChange();
         }
     } else {
-        addCommentary(`SHOT by <span class="${color}">${shooter.name}</span>! Goes wide!`);
+        addCommentary('SHOT by <span class="' + color + '">' + shooter.name + '</span>! Goes wide!');
         handlePossessionChange();
     }
 }
@@ -1095,7 +1164,7 @@ function handleGoal(scorer, assistant) {
         }
     }
     
-    showGoalCelebration(scorer.name, assistantPlayer?.name);
+    showGoalCelebrationRegular(scorer.name, assistantPlayer?.name);
     updateMomentum(0.3);
     
     // Reset for kickoff
@@ -1107,9 +1176,9 @@ function handleGoal(scorer, assistant) {
 }
 
 /**
- * Show goal celebration
+ * Show goal celebration (for regular matches)
  */
-function showGoalCelebration(scorer, assistant) {
+function showGoalCelebrationRegular(scorer, assistant) {
     const goalBanner = document.getElementById('goal-banner');
     const scorerEl = document.getElementById('goal-scorer');
     const assistEl = document.getElementById('goal-assist');
@@ -1117,8 +1186,8 @@ function showGoalCelebration(scorer, assistant) {
     
     if (goalBanner) {
         scorerEl.textContent = scorer;
-        assistEl.textContent = assistant ? `Assist: ${assistant}` : '';
-        minuteEl.textContent = `${Math.floor(matchState.currentTime)}'`;
+        assistEl.textContent = assistant ? 'Assist: ' + assistant : '';
+        minuteEl.textContent = Math.floor(matchState.currentTime) + "'";
         goalBanner.classList.remove('hidden');
         
         setTimeout(() => {
@@ -1157,21 +1226,21 @@ function handleFoul(defendingTeam, attackingTeam) {
     
     if (inPenaltyArea) {
         // Penalty awarded
-        addCommentary(`PENALTY awarded to ${attackingTeam.name}!`);
+        addCommentary('PENALTY awarded to ' + attackingTeam.name + '!');
         handlePenalty(attackingTeam, defendingTeam);
     } else {
         // Card chance (only yellow cards, no red cards)
         const cardChance = Math.random();
         if (cardChance < 0.20) {
             // Yellow card
-            addCommentary(`Yellow card for <span class="${color}">${fouler.name}</span>`);
+            addCommentary('Yellow card for <span class="' + color + '">' + fouler.name + '</span>');
             if (isHome) {
                 matchState.awayYellowCards++;
             } else {
                 matchState.homeYellowCards++;
             }
         } else {
-            addCommentary(`Foul by <span class="${color}">${fouler.name}</span>`);
+            addCommentary('Foul by <span class="' + color + '">' + fouler.name + '</span>');
         }
         
         // Free kick
@@ -1204,7 +1273,7 @@ function handleCorner(attackingTeam) {
         matchState.awayCorners++;
     }
     
-    addCommentary(`Corner to ${attackingTeam.name}`);
+    addCommentary('Corner to ' + attackingTeam.name);
     
     // Position ball in corner
     if (matchState.possession === 'home') {
@@ -1223,7 +1292,7 @@ function handleCorner(attackingTeam) {
  * Handle throw in
  */
 function handleThrowIn(team) {
-    addCommentary(`Throw in for ${team.name}`);
+    addCommentary('Throw in for ' + team.name);
 }
 
 /**
@@ -1268,7 +1337,7 @@ function handlePenalty(attackingTeam, defendingTeam) {
         matchState.ballPosition = { x: 15, y: 50 };
     }
     
-    addCommentary(`PENALTY! <span class="${color}">${shooter.name}</span> steps up...`);
+    addCommentary('PENALTY! <span class="' + color + '">' + shooter.name + '</span> steps up...');
     
     // Auto-calculate penalty result (higher chance for penalties)
     const shotResult = calculateShotResult(shooter, defendingTeam, false, true);
@@ -1295,11 +1364,11 @@ function handlePenalty(attackingTeam, defendingTeam) {
         } else {
             const goalkeeper = getGoalkeeper(defendingTeam);
             const gkColor = !isHome ? 'blue' : 'red';
-            addCommentary(`Penalty saved by <span class="${gkColor}">${goalkeeper.name}</span>!`);
+            addCommentary('Penalty saved by <span class="' + gkColor + '">' + goalkeeper.name + '</span>!');
             handlePossessionChange();
         }
     } else {
-        addCommentary(`Penalty missed! Goes over the bar.`);
+        addCommentary('Penalty missed! Goes over the bar.');
         handlePossessionChange();
     }
 }
@@ -1335,16 +1404,16 @@ function processShot(target) {
         }
         
         if (shotResult.isGoal) {
-            addCommentary(`SHOT by <span class="${color}">${shooter.name}</span>! GOAL!`);
+            addCommentary('SHOT by <span class="' + color + '">' + shooter.name + '</span>! GOAL!');
             handleGoal(shooter, null);
         } else {
             const goalkeeper = getGoalkeeper(defendingTeam);
             const gkColor = !isHome ? 'blue' : 'red';
-            addCommentary(`SHOT by <span class="${color}">${shooter.name}</span>! Saved by <span class="${gkColor}">${goalkeeper.name}</span>!`);
+            addCommentary('SHOT by <span class="' + color + '">' + shooter.name + '</span>! Saved by <span class="' + gkColor + '">' + goalkeeper.name + '</span>!');
             handlePossessionChange();
         }
     } else {
-        addCommentary(`SHOT by <span class="${color}">${shooter.name}</span>! Goes ${getTargetMissDescription(target)}!`);
+        addCommentary('SHOT by <span class="' + color + '">' + shooter.name + '</span>! Goes ' + getTargetMissDescription(target) + '!');
         handlePossessionChange();
     }
     
@@ -1369,7 +1438,7 @@ function handleAutoShot(attackingTeam, defendingTeam, isHeader = false) {
         matchState.awayShots++;
     }
     
-    addCommentary(`SHOT by <span class="${color}">${shooter.name}</span>!`);
+    addCommentary('SHOT by <span class="' + color + '">' + shooter.name + '</span>!');
     
     const shotResult = calculateShotResult(shooter, defendingTeam, isHeader);
     
@@ -1393,11 +1462,11 @@ function handleAutoShot(attackingTeam, defendingTeam, isHeader = false) {
         } else {
             const goalkeeper = getGoalkeeper(defendingTeam);
             const gkColor = !isHome ? 'blue' : 'red';
-            addCommentary(`Shot saved by <span class="${gkColor}">${goalkeeper.name}</span>!`);
+            addCommentary('Shot saved by <span class="' + gkColor + '">' + goalkeeper.name + '</span>!');
             handlePossessionChange();
         }
     } else {
-        addCommentary(`Shot goes wide.`);
+        addCommentary('Shot goes wide.');
         handlePossessionChange();
     }
 }
@@ -1516,13 +1585,7 @@ function showSquadPreview() {
         matchState.homeTeam.players.forEach(player => {
             const playerEl = document.createElement('div');
             playerEl.className = 'squad-player';
-            playerEl.innerHTML = `
-                <span class="squad-player-name">${player.name}</span>
-                <div class="squad-player-info">
-                    <span>${player.position}</span>
-                    <span>${player.rating}</span>
-                </div>
-            `;
+            playerEl.innerHTML = '<span class="squad-player-name">' + player.name + '</span><div class="squad-player-info"><span>' + player.position + '</span><span>' + player.rating + '</span></div>';
             homeSquad.appendChild(playerEl);
         });
         
@@ -1531,13 +1594,7 @@ function showSquadPreview() {
         matchState.awayTeam.players.forEach(player => {
             const playerEl = document.createElement('div');
             playerEl.className = 'squad-player';
-            playerEl.innerHTML = `
-                <span class="squad-player-name">${player.name}</span>
-                <div class="squad-player-info">
-                    <span>${player.position}</span>
-                    <span>${player.rating}</span>
-                </div>
-            `;
+            playerEl.innerHTML = '<span class="squad-player-name">' + player.name + '</span><div class="squad-player-info"><span>' + player.position + '</span><span>' + player.rating + '</span></div>';
             awaySquad.appendChild(playerEl);
         });
         
@@ -1655,26 +1712,26 @@ function updateMatchUI() {
     document.getElementById('match-away-score').textContent = matchState.awayScore;
     
     const minutes = Math.floor(matchState.currentTime);
-    document.getElementById('match-time').textContent = `${minutes}'`;
+    document.getElementById('match-time').textContent = minutes + "'";
     
     // Update possession
     const totalPossession = matchState.homePossessionTime + matchState.awayPossessionTime || 1;
     const homePossessionPct = Math.round((matchState.homePossessionTime / totalPossession) * 100);
     const awayPossessionPct = 100 - homePossessionPct;
-    document.getElementById('match-possession').textContent = `${homePossessionPct}% - ${awayPossessionPct}%`;
+    document.getElementById('match-possession').textContent = homePossessionPct + '% - ' + awayPossessionPct + '%';
     
     // Update stats
-    document.getElementById('match-shots').textContent = `${matchState.homeShots} - ${matchState.awayShots}`;
-    document.getElementById('match-shots-on-target').textContent = `${matchState.homeShotsOnTarget} - ${matchState.awayShotsOnTarget}`;
-    document.getElementById('match-corners').textContent = `${matchState.homeCorners} - ${matchState.awayCorners}`;
-    document.getElementById('match-fouls').textContent = `${matchState.homeFouls} - ${matchState.awayFouls}`;
-    document.getElementById('match-xg').textContent = `${matchState.homeXG.toFixed(2)} - ${matchState.awayXG.toFixed(2)}`;
+    document.getElementById('match-shots').textContent = matchState.homeShots + ' - ' + matchState.awayShots;
+    document.getElementById('match-shots-on-target').textContent = matchState.homeShotsOnTarget + ' - ' + matchState.awayShotsOnTarget;
+    document.getElementById('match-corners').textContent = matchState.homeCorners + ' - ' + matchState.awayCorners;
+    document.getElementById('match-fouls').textContent = matchState.homeFouls + ' - ' + matchState.awayFouls;
+    document.getElementById('match-xg').textContent = matchState.homeXG.toFixed(2) + ' - ' + matchState.awayXG.toFixed(2);
     
     // Update ball position
     const ball = document.getElementById('ball');
     if (ball) {
-        ball.style.left = `${matchState.ballPosition.x}%`;
-        ball.style.top = `${matchState.ballPosition.y}%`;
+        ball.style.left = matchState.ballPosition.x + '%';
+        ball.style.top = matchState.ballPosition.y + '%';
         ball.style.transform = 'translate(-50%, -50%)';
     }
 }
@@ -1691,7 +1748,7 @@ function updateCommentaryUI() {
     matchState.commentary.forEach(comment => {
         const item = document.createElement('div');
         item.className = 'commentary-item';
-        item.innerHTML = `<span class="commentary-minute">${comment.minute}'</span> ${comment.text}`;
+        item.innerHTML = '<span class="commentary-minute">' + comment.minute + "'</span> " + comment.text;
         feed.appendChild(item);
     });
 }
@@ -1714,16 +1771,16 @@ async function showMatchResults() {
     const homePossessionPct = Math.round((matchState.homePossessionTime / totalPossession) * 100);
     const awayPossessionPct = 100 - homePossessionPct;
     
-    document.getElementById('results-possession').textContent = `${homePossessionPct}% - ${awayPossessionPct}%`;
-    document.getElementById('results-shots').textContent = `${matchState.homeShots} - ${matchState.awayShots}`;
-    document.getElementById('results-shots-on-target').textContent = `${matchState.homeShotsOnTarget} - ${matchState.awayShotsOnTarget}`;
-    document.getElementById('results-corners').textContent = `${matchState.homeCorners} - ${matchState.awayCorners}`;
-    document.getElementById('results-xg').textContent = `${matchState.homeXG.toFixed(2)} - ${matchState.awayXG.toFixed(2)}`;
+    document.getElementById('results-possession').textContent = homePossessionPct + '% - ' + awayPossessionPct + '%';
+    document.getElementById('results-shots').textContent = matchState.homeShots + ' - ' + matchState.awayShots;
+    document.getElementById('results-shots-on-target').textContent = matchState.homeShotsOnTarget + ' - ' + matchState.awayShotsOnTarget;
+    document.getElementById('results-corners').textContent = matchState.homeCorners + ' - ' + matchState.awayCorners;
+    document.getElementById('results-xg').textContent = matchState.homeXG.toFixed(2) + ' - ' + matchState.awayXG.toFixed(2);
     
     // Pass accuracy
     const homePassAccuracy = matchState.homePasses > 0 ? Math.round((matchState.homePassesCompleted / matchState.homePasses) * 100) : 0;
     const awayPassAccuracy = matchState.awayPasses > 0 ? Math.round((matchState.awayPassesCompleted / matchState.awayPasses) * 100) : 0;
-    document.getElementById('results-pass-accuracy').textContent = `${homePassAccuracy}% - ${awayPassAccuracy}%`;
+    document.getElementById('results-pass-accuracy').textContent = homePassAccuracy + '% - ' + awayPassAccuracy + '%';
     
     // Goals
     const goalsList = document.getElementById('goals-list');
@@ -1732,7 +1789,7 @@ async function showMatchResults() {
     matchState.goals.forEach(goal => {
         const goalItem = document.createElement('div');
         goalItem.className = 'goal-item';
-        goalItem.textContent = `${goal.minute}' - ${goal.scorer}${goal.assistant ? ` (Assist: ${goal.assistant})` : ''}`;
+        goalItem.textContent = goal.minute + "' - " + goal.scorer + (goal.assistant ? ' (Assist: ' + goal.assistant + ')' : '');
         goalsList.appendChild(goalItem);
     });
     
@@ -1748,7 +1805,7 @@ async function showMatchResults() {
     
     document.getElementById('reward-coins').textContent = totalCoins;
     document.getElementById('reward-xp').textContent = '0';
-    document.getElementById('reward-rank-points').textContent = rankPoints > 0 ? `+${rankPoints}` : rankPoints;
+    document.getElementById('reward-rank-points').textContent = rankPoints > 0 ? '+' + rankPoints : rankPoints;
     document.getElementById('reward-pack-progress').textContent = '0%';
     document.getElementById('reward-club-xp').textContent = '0';
     
@@ -1815,29 +1872,29 @@ async function awardRewards(coins, xp, rankPoints) {
         const profile = await getUserProfile(currentUser.uid);
         
         if (profile) {
-            console.log(`[Match Engine] Current profile:`, { rankPoints: profile.rankPoints, economyRankPoints: profile.economy?.rankPoints, statsRankPoints: profile.stats?.rankPoints });
+            console.log('[Match Engine] Current profile:', { rankPoints: profile.rankPoints, economyRankPoints: profile.economy?.rankPoints, statsRankPoints: profile.stats?.rankPoints });
             
             // Update coins using transaction
             await updateCoinsTransaction(currentUser.uid, coins);
             
             // Update rank points using transaction (like coins)
-            const rankPointsRef = ref(db, `users/${currentUser.uid}/rankPoints`);
+            const rankPointsRef = ref(db, 'users/' + currentUser.uid + '/rankPoints');
             let rankUpdateSuccess = true;
             
             await runTransaction(rankPointsRef, (currentRankPoints) => {
                 if (currentRankPoints === null) currentRankPoints = 500; // Initialize if null
                 const newRankPoints = currentRankPoints + rankPoints;
-                console.log(`[Match Engine] Transaction: ${currentRankPoints} -> ${newRankPoints} (+${rankPoints})`);
+                console.log('[Match Engine] Transaction: ' + currentRankPoints + ' -> ' + newRankPoints + ' (+' + rankPoints + ')');
                 return newRankPoints;
             });
             
-            console.log(`[Match Engine] Rank points transaction completed: ${rankUpdateSuccess}`);
+            console.log('[Match Engine] Rank points transaction completed: ' + rankUpdateSuccess);
             
             // Reload profile to get updated rank points
             const updatedProfile = await getUserProfile(currentUser.uid);
             const newRankPoints = updatedProfile?.rankPoints || profile.rankPoints + rankPoints;
             
-            console.log(`[Match Engine] New rank points from DB: ${newRankPoints}`);
+            console.log('[Match Engine] New rank points from DB: ' + newRankPoints);
             
             // Update stats
             const newStats = {
@@ -1851,7 +1908,7 @@ async function awardRewards(coins, xp, rankPoints) {
             };
             
             // Update user profile with new stats
-            const statsRef = ref(db, `users/${currentUser.uid}/stats`);
+            const statsRef = ref(db, 'users/' + currentUser.uid + '/stats');
             await update(statsRef, newStats);
             
             // Update local profile
@@ -1860,7 +1917,7 @@ async function awardRewards(coins, xp, rankPoints) {
                 window.userProfile.stats = newStats;
             }
             
-            console.log(`[Match Engine] Rewards awarded: ${coins} coins, ${rankPoints} rank points (total: ${newRankPoints})`);
+            console.log('[Match Engine] Rewards awarded: ' + coins + ' coins, ' + rankPoints + ' rank points (total: ' + newRankPoints + ')');
         }
     } catch (error) {
         console.error('[Match Engine] Error awarding rewards:', error);
@@ -1903,7 +1960,7 @@ function startCooldownTimer(endTime) {
         
         const minutes = Math.floor(remaining / 60000);
         const seconds = Math.floor((remaining % 60000) / 1000);
-        if (timerEl) timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        if (timerEl) timerEl.textContent = minutes + ':' + seconds.toString().padStart(2, '0');
         
         setTimeout(updateTimer, 1000);
     };

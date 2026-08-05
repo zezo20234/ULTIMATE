@@ -64,10 +64,50 @@ let matchmakingState = {
  * Initialize matchmaking for a specific match type
  */
 export function startMatchmaking(matchType) {
+    console.log(`[Matchmaking] Starting ${matchType} matchmaking`);
+    
+    // Always reset state first to clear any previous matchmaking
     if (matchmakingState.isActive) {
-        console.warn('[Matchmaking] Already searching for a match');
-        return;
+        console.log('[Matchmaking] Clearing previous matchmaking state');
+        // Stop any active timers/listeners without calling full cancelMatchmaking
+        if (matchmakingState.searchTimer) {
+            clearInterval(matchmakingState.searchTimer);
+        }
+        if (matchmakingState.friendCheckInterval) {
+            clearInterval(matchmakingState.friendCheckInterval);
+        }
+        if (matchmakingState.matchListener) {
+            clearInterval(matchmakingState.matchListener);
+        }
+        if (matchmakingState.queueListener && typeof matchmakingState.queueListener === 'function') {
+            matchmakingState.queueListener();
+        }
+        if (matchmakingState.matchStateListener && typeof matchmakingState.matchStateListener === 'function') {
+            matchmakingState.matchStateListener();
+        }
+        if (matchmakingState.lobbyListener && typeof matchmakingState.lobbyListener === 'function') {
+            matchmakingState.lobbyListener();
+        }
     }
+    
+    // Reset state
+    matchmakingState = {
+        isActive: false,
+        matchType: null,
+        searchStartTime: null,
+        searchTimer: null,
+        friendCheckInterval: null,
+        queueListener: null,
+        matchListener: null,
+        currentUserId: null,
+        queueId: null,
+        keepAliveInterval: null,
+        currentMatchId: null,
+        matchStateListener: null,
+        playerNum: null,
+        currentLobbyId: null,
+        lobbyListener: null
+    };
 
     const currentUser = window.currentUser;
     if (!currentUser) {
@@ -99,6 +139,7 @@ export function startMatchmaking(matchType) {
  */
 async function startRankedOrUnrankedMatchmaking(matchType) {
     console.log(`[Matchmaking] Starting ${matchType} matchmaking`);
+    console.log('[Matchmaking] Current user ID:', matchmakingState.currentUserId);
 
     try {
         // Set user as online
@@ -123,6 +164,8 @@ async function startRankedOrUnrankedMatchmaking(matchType) {
             ...userSquad,
             starters: userSquadWithPlayers
         };
+        
+        console.log('[Matchmaking] User squad:', fullUserSquad);
         
         // Create queue entry with squad data
         const squadData = {
@@ -281,7 +324,7 @@ async function startFriendMatchmaking() {
             updateUserLastSeen(matchmakingState.currentUserId);
         }, MATCHMAKING_CONFIG.ONLINE_KEEP_ALIVE_INTERVAL);
         
-        showSearchingUI('friend');
+        // Immediately show lobby system - no loading, no searching
         showLobbySystem();
     } catch (error) {
         console.error('[Matchmaking] Failed to start friend matchmaking:', error);
@@ -294,22 +337,38 @@ async function startFriendMatchmaking() {
  * Show lobby system UI
  */
 function showLobbySystem() {
+    console.log('[Matchmaking] Showing lobby system UI');
+    
     const matchmakingScreen = document.getElementById('matchmaking-screen');
     const readyContainer = document.getElementById('ready-screen-container');
     const matchmakingOptions = document.getElementById('matchmaking-options');
     
-    if (!matchmakingScreen || !readyContainer) return;
+    console.log('[Matchmaking] Elements found:', {
+        matchmakingScreen: !!matchmakingScreen,
+        readyContainer: !!readyContainer,
+        matchmakingOptions: !!matchmakingOptions
+    });
+    
+    if (!matchmakingScreen || !readyContainer) {
+        console.error('[Matchmaking] Required elements not found');
+        return;
+    }
     
     // Hide matchmaking options, show lobby container
-    if (matchmakingOptions) matchmakingOptions.classList.add('hidden');
+    if (matchmakingOptions) {
+        matchmakingOptions.classList.add('hidden');
+        console.log('[Matchmaking] Hidden matchmaking options');
+    }
+    
     readyContainer.classList.remove('hidden');
+    console.log('[Matchmaking] Showed ready container');
     
     readyContainer.innerHTML = `
         <div class="lobby-system">
             <h2>FRIEND MATCH</h2>
             <div class="lobby-tabs">
-                <button id="create-lobby-btn" class="btn btn-primary">Create Lobby</button>
-                <button id="join-lobby-btn" class="btn btn-outline">Join Lobby</button>
+                <button id="create-lobby-btn" class="btn btn-primary">Create Room</button>
+                <button id="join-lobby-btn" class="btn btn-outline">Join Room</button>
             </div>
             
             <div id="lobby-content" class="lobby-content">
@@ -317,6 +376,8 @@ function showLobbySystem() {
             </div>
         </div>
     `;
+    
+    console.log('[Matchmaking] Lobby system HTML injected');
     
     // Show create lobby form by default
     showCreateLobbyForm();
@@ -335,44 +396,71 @@ function showCreateLobbyForm() {
     
     lobbyContent.innerHTML = `
         <div class="create-lobby-form">
-            <h3>Create a Lobby</h3>
-            <p class="text-muted">Share the lobby code with your friend</p>
-            <button id="create-lobby-action-btn" class="btn btn-primary btn-lg">Create Lobby</button>
+            <h3>Create a Room</h3>
+            <p class="text-muted">Create a room and share the code with your friend to play together</p>
+            <div class="form-info">
+                <div class="info-item">
+                    <i class="fa-solid fa-users"></i>
+                    <span>2 Players</span>
+                </div>
+                <div class="info-item">
+                    <i class="fa-solid fa-futbol"></i>
+                    <span>Friend Match</span>
+                </div>
+                <div class="info-item">
+                    <i class="fa-solid fa-clock"></i>
+                    <span>No Rank Points</span>
+                </div>
+            </div>
+            <button id="create-lobby-action-btn" class="btn btn-primary btn-lg">
+                <i class="fa-solid fa-plus"></i> Create Room
+            </button>
         </div>
     `;
     
     document.getElementById('create-lobby-action-btn').addEventListener('click', async () => {
-        // Get user's squad data
-        const userSquad = window.userProfile?.squad;
-        const userClub = window.userProfile?.club;
-        const userSquadWithPlayers = {};
-        if (userSquad?.starters) {
-            Object.entries(userSquad.starters).forEach(([key, starter]) => {
-                const instanceId = starter.instanceId;
-                if (instanceId && userClub && userClub[instanceId]) {
-                    userSquadWithPlayers[key] = userClub[instanceId];
-                } else if (starter.name) {
-                    userSquadWithPlayers[key] = starter;
-                }
-            });
+        const btn = document.getElementById('create-lobby-action-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating...';
+        
+        try {
+            // Get user's squad data
+            const userSquad = window.userProfile?.squad;
+            const userClub = window.userProfile?.club;
+            const userSquadWithPlayers = {};
+            if (userSquad?.starters) {
+                Object.entries(userSquad.starters).forEach(([key, starter]) => {
+                    const instanceId = starter.instanceId;
+                    if (instanceId && userClub && userClub[instanceId]) {
+                        userSquadWithPlayers[key] = userClub[instanceId];
+                    } else if (starter.name) {
+                        userSquadWithPlayers[key] = starter;
+                    }
+                });
+            }
+            
+            const fullUserSquad = {
+                ...userSquad,
+                starters: userSquadWithPlayers
+            };
+            
+            // Create lobby
+            const lobbyId = await createLobby(
+                matchmakingState.currentUserId,
+                window.userProfile?.profile?.clubName || 'My Club',
+                fullUserSquad
+            );
+            
+            matchmakingState.currentLobbyId = lobbyId;
+            
+            // Show lobby with code
+            showLobbyRoom(lobbyId, true);
+        } catch (error) {
+            console.error('[Matchmaking] Error creating lobby:', error);
+            window.showToast('Failed to create room. Please try again.', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-plus"></i> Create Room';
         }
-        
-        const fullUserSquad = {
-            ...userSquad,
-            starters: userSquadWithPlayers
-        };
-        
-        // Create lobby
-        const lobbyId = await createLobby(
-            matchmakingState.currentUserId,
-            window.userProfile?.profile?.clubName || 'My Club',
-            fullUserSquad
-        );
-        
-        matchmakingState.currentLobbyId = lobbyId;
-        
-        // Show lobby with code
-        showLobbyRoom(lobbyId, true);
     });
 }
 
@@ -385,52 +473,81 @@ function showJoinLobbyForm() {
     
     lobbyContent.innerHTML = `
         <div class="join-lobby-form">
-            <h3>Join a Lobby</h3>
-            <p class="text-muted">Enter the lobby code from your friend</p>
-            <input type="text" id="lobby-code-input" class="search-input" placeholder="Enter lobby code..." />
-            <button id="join-lobby-action-btn" class="btn btn-primary btn-lg">Join Lobby</button>
+            <h3>Join a Room</h3>
+            <p class="text-muted">Enter the room code from your friend to join their match</p>
+            <div class="input-group">
+                <input type="text" id="lobby-code-input" class="search-input" placeholder="Enter room code..." maxlength="50" />
+                <button id="join-lobby-action-btn" class="btn btn-primary btn-lg">
+                    <i class="fa-solid fa-right-to-bracket"></i> Join Room
+                </button>
+            </div>
+            <p class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;">
+                <i class="fa-solid fa-circle-info"></i> Room codes are case-sensitive
+            </p>
         </div>
     `;
     
+    // Handle join button click
     document.getElementById('join-lobby-action-btn').addEventListener('click', async () => {
         const lobbyCode = document.getElementById('lobby-code-input').value.trim();
         if (!lobbyCode) {
-            window.showToast('Please enter a lobby code', 'error');
+            window.showToast('Please enter a room code', 'error');
             return;
         }
         
-        // Try to join the lobby
-        const userSquad = window.userProfile?.squad;
-        const userClub = window.userProfile?.club;
-        const userSquadWithPlayers = {};
-        if (userSquad?.starters) {
-            Object.entries(userSquad.starters).forEach(([key, starter]) => {
-                const instanceId = starter.instanceId;
-                if (instanceId && userClub && userClub[instanceId]) {
-                    userSquadWithPlayers[key] = userClub[instanceId];
-                } else if (starter.name) {
-                    userSquadWithPlayers[key] = starter;
-                }
-            });
+        const btn = document.getElementById('join-lobby-action-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Joining...';
+        
+        try {
+            // Get user's squad data
+            const userSquad = window.userProfile?.squad;
+            const userClub = window.userProfile?.club;
+            const userSquadWithPlayers = {};
+            if (userSquad?.starters) {
+                Object.entries(userSquad.starters).forEach(([key, starter]) => {
+                    const instanceId = starter.instanceId;
+                    if (instanceId && userClub && userClub[instanceId]) {
+                        userSquadWithPlayers[key] = userClub[instanceId];
+                    } else if (starter.name) {
+                        userSquadWithPlayers[key] = starter;
+                    }
+                });
+            }
+            
+            const fullUserSquad = {
+                ...userSquad,
+                starters: userSquadWithPlayers
+            };
+            
+            // Try to join the lobby
+            const success = await joinLobby(
+                lobbyCode,
+                matchmakingState.currentUserId,
+                window.userProfile?.profile?.clubName || 'My Club',
+                fullUserSquad
+            );
+            
+            if (success) {
+                matchmakingState.currentLobbyId = lobbyCode;
+                showLobbyRoom(lobbyCode, false);
+            } else {
+                window.showToast('Room not found or full. Check the code and try again.', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Join Room';
+            }
+        } catch (error) {
+            console.error('[Matchmaking] Error joining lobby:', error);
+            window.showToast('Failed to join room. Please try again.', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Join Room';
         }
-        
-        const fullUserSquad = {
-            ...userSquad,
-            starters: userSquadWithPlayers
-        };
-        
-        const success = await joinLobby(
-            lobbyCode,
-            matchmakingState.currentUserId,
-            window.userProfile?.profile?.clubName || 'My Club',
-            fullUserSquad
-        );
-        
-        if (success) {
-            matchmakingState.currentLobbyId = lobbyCode;
-            showLobbyRoom(lobbyCode, false);
-        } else {
-            window.showToast('Failed to join lobby. Check the code and try again.', 'error');
+    });
+    
+    // Allow Enter key to submit
+    document.getElementById('lobby-code-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('join-lobby-action-btn').click();
         }
     });
 }
@@ -444,18 +561,40 @@ function showLobbyRoom(lobbyId, isHost) {
     
     lobbyContent.innerHTML = `
         <div class="lobby-room">
-            <h3>Lobby Room</h3>
-            <div class="lobby-code">
-                <span class="text-muted">Lobby Code:</span>
-                <code id="lobby-code-display">${lobbyId}</code>
-                <button id="copy-code-btn" class="btn btn-outline">Copy</button>
+            <div class="lobby-header">
+                <h3><i class="fa-solid fa-door-open"></i> Room</h3>
+                <span class="lobby-status" id="lobby-status">Waiting for players...</span>
             </div>
-            <div id="lobby-players" class="lobby-players">
-                <p class="text-muted">Waiting for players...</p>
+            
+            <div class="lobby-code-section">
+                <div class="code-label">
+                    <i class="fa-solid fa-key"></i> Room Code
+                </div>
+                <div class="code-display">
+                    <code id="lobby-code-display">${lobbyId}</code>
+                    <button id="copy-code-btn" class="btn btn-sm btn-outline">
+                        <i class="fa-solid fa-copy"></i> Copy
+                    </button>
+                </div>
+                <p class="text-muted" style="font-size: 0.8rem; margin-top: 0.5rem;">
+                    Share this code with your friend
+                </p>
             </div>
+            
+            <div class="lobby-players-section">
+                <h4>Players</h4>
+                <div id="lobby-players" class="lobby-players">
+                    <p class="text-muted">Waiting for players...</p>
+                </div>
+            </div>
+            
             <div class="lobby-actions">
-                <button id="lobby-ready-btn" class="btn btn-primary btn-lg">READY</button>
-                <button id="leave-lobby-btn" class="btn btn-outline">Leave</button>
+                <button id="lobby-ready-btn" class="btn btn-primary btn-lg">
+                    <i class="fa-solid fa-check"></i> Ready
+                </button>
+                <button id="leave-lobby-btn" class="btn btn-outline">
+                    <i class="fa-solid fa-right-from-bracket"></i> Leave
+                </button>
             </div>
         </div>
     `;
@@ -463,7 +602,7 @@ function showLobbyRoom(lobbyId, isHost) {
     // Copy code button
     document.getElementById('copy-code-btn').addEventListener('click', () => {
         navigator.clipboard.writeText(lobbyId);
-        window.showToast('Lobby code copied!', 'success');
+        window.showToast('Room code copied to clipboard!', 'success');
     });
     
     // Leave lobby button
@@ -475,14 +614,44 @@ function showLobbyRoom(lobbyId, isHost) {
     matchmakingState.lobbyListener = listenToLobby(lobbyId, (lobbyData) => {
         console.log('[Matchmaking] Lobby updated:', lobbyData);
         
+        // Update status
+        const statusEl = document.getElementById('lobby-status');
+        if (statusEl) {
+            const playerCount = Object.keys(lobbyData.players || {}).length;
+            if (playerCount === 1) {
+                statusEl.textContent = 'Waiting for player 2...';
+                statusEl.className = 'lobby-status waiting';
+            } else if (playerCount === 2) {
+                statusEl.textContent = 'Room full - Waiting for ready...';
+                statusEl.className = 'lobby-status full';
+            } else {
+                statusEl.textContent = 'Waiting for players...';
+                statusEl.className = 'lobby-status waiting';
+            }
+        }
+        
         // Update players display
         const playersDiv = document.getElementById('lobby-players');
         if (playersDiv) {
             const players = Object.values(lobbyData.players || {});
-            playersDiv.innerHTML = players.map(player => `
+            playersDiv.innerHTML = players.map((player, index) => `
                 <div class="lobby-player ${player.ready ? 'ready' : ''}">
-                    <span class="player-name">${player.clubName}</span>
-                    <span class="player-status">${player.ready ? '✓ Ready' : 'Not Ready'}</span>
+                    <div class="player-info">
+                        <div class="player-avatar">
+                            <i class="fa-solid fa-user-shield"></i>
+                        </div>
+                        <div class="player-details">
+                            <div class="player-name">${player.clubName || 'Unknown'}</div>
+                            <div class="player-squad-rating">
+                                Rating: ${player.squad?.rating || 75}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="player-status">
+                        ${player.ready ? 
+                            '<span class="status-badge ready"><i class="fa-solid fa-check"></i> Ready</span>' : 
+                            '<span class="status-badge not-ready">Not Ready</span>'}
+                    </div>
                 </div>
             `).join('');
         }
@@ -502,7 +671,17 @@ function showLobbyRoom(lobbyId, isHost) {
     // Ready button
     document.getElementById('lobby-ready-btn').addEventListener('click', () => {
         const playerNum = isHost ? 'host' : 'player2';
-        setLobbyPlayerReady(lobbyId, playerNum);
+        const btn = document.getElementById('lobby-ready-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Setting ready...';
+        
+        setLobbyPlayerReady(lobbyId, playerNum).then(() => {
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Ready!';
+        }).catch(error => {
+            console.error('[Matchmaking] Error setting ready:', error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Ready';
+        });
     });
 }
 
@@ -653,32 +832,48 @@ function startQueueMatching() {
             if (matchmakingState.searchTimer) {
                 clearInterval(matchmakingState.searchTimer);
             }
+            if (matchmakingState.matchListener) {
+                clearInterval(matchmakingState.matchListener);
+            }
             
             // Show ready screen
             showQueueReadyScreen(queueData.matchId);
         }
     });
     
-    // Also poll for opponents (fallback)
+    // Also poll for opponents (fallback with improved matching)
     matchmakingState.matchListener = setInterval(async () => {
         try {
             const queue = await getMatchmakingQueue(matchmakingState.matchType);
             
-            // Find other players searching
+            console.log('[Matchmaking] Queue length:', queue.length);
+            console.log('[Matchmaking] My queue ID:', matchmakingState.queueId);
+            
+            // Find other players searching (prefer similar skill level)
+            const userRating = window.userProfile?.squad?.rating || 75;
             const otherPlayers = queue.filter(entry => 
                 entry.userId !== matchmakingState.currentUserId &&
-                entry.status === 'searching' &&
-                Math.abs(entry.squadRating - (window.userProfile?.squad?.rating || 75)) <= 10
-            );
+                entry.status === 'searching'
+            ).sort((a, b) => {
+                // Sort by rating difference (closest ratings first)
+                const aDiff = Math.abs(a.squadRating - userRating);
+                const bDiff = Math.abs(b.squadRating - userRating);
+                return aDiff - bDiff;
+            });
+
+            console.log('[Matchmaking] Other players searching:', otherPlayers.length);
+            console.log('[Matchmaking] Other players:', otherPlayers.map(p => `${p.clubName} (${p.squadRating})`));
 
             if (otherPlayers.length > 0) {
                 // Found a match!
                 const opponent = otherPlayers[0];
-                console.log('[Matchmaking] Found opponent:', opponent.clubName);
+                console.log('[Matchmaking] Found opponent:', opponent.clubName, opponent.userId, 'Rating:', opponent.squadRating);
                 
                 // Create match state
                 const matchId = `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 matchmakingState.currentMatchId = matchId;
+                
+                console.log('[Matchmaking] Creating match with ID:', matchId);
                 
                 // Get opponent's squad data
                 const opponentSquad = await getUserSquad(opponent.userId);
@@ -688,6 +883,8 @@ function startQueueMatching() {
                     console.error('[Matchmaking] Failed to fetch opponent squad');
                     return;
                 }
+                
+                console.log('[Matchmaking] Opponent squad loaded');
                 
                 // Convert opponent squad
                 const opponentSquadWithPlayers = {};
@@ -727,6 +924,8 @@ function startQueueMatching() {
                     starters: userSquadWithPlayers
                 };
                 
+                console.log('[Matchmaking] Creating shared match state...');
+                
                 // Create shared match state
                 await createMatchState(
                     matchId,
@@ -736,6 +935,8 @@ function startQueueMatching() {
                     fullOpponentSquad,
                     matchmakingState.matchType
                 );
+                
+                console.log('[Matchmaking] Match state created, updating queue statuses...');
                 
                 // Update both queue entries to matched
                 await setQueueStatus(matchmakingState.queueId, 'matched', matchId);
@@ -759,10 +960,22 @@ async function fallbackToAI() {
     if (matchmakingState.matchListener) {
         clearInterval(matchmakingState.matchListener);
     }
+    if (matchmakingState.queueListener && typeof matchmakingState.queueListener === 'function') {
+        matchmakingState.queueListener();
+    }
 
     // Stop keep-alive
     if (matchmakingState.keepAliveInterval) {
         clearInterval(matchmakingState.keepAliveInterval);
+    }
+
+    // Remove from queue
+    if (matchmakingState.queueId) {
+        try {
+            await leaveMatchmakingQueue(matchmakingState.queueId);
+        } catch (error) {
+            console.error('[Matchmaking] Error leaving queue:', error);
+        }
     }
 
     // Set user offline
@@ -775,12 +988,14 @@ async function fallbackToAI() {
     }
 
     hideSearchingUI();
-    window.showToast('No opponent found. Matching against an AI club.', 'info');
+    
+    const matchTypeText = matchmakingState.matchType === 'ranked' ? 'Ranked' : 'Unranked';
+    window.showToast(`No ${matchTypeText.toLowerCase()} opponent found. Matching against an AI club.`, 'info');
     
     // Small delay before starting match
     setTimeout(() => {
         startMatchWithAI(matchmakingState.matchType);
-    }, 1000);
+    }, 1500);
 }
 
 /**
@@ -857,8 +1072,14 @@ function startRealTimeMatch(matchId, playerNum, opponentId, opponentName) {
         
         // If match is in progress, initialize the match engine
         if (matchState.status === 'in_progress') {
-            // Initialize match with shared state
-            initializeRealTimeMatch(matchState);
+            // Store match state globally for match.js to access
+            window.sharedMatchState = matchState;
+            window.currentPlayerNum = playerNum;
+            
+            // Switch to match screen and initialize
+            hideSearchingUI();
+            const { initializeMatch } = await import('./match.js');
+            await initializeMatch('friend', { isRealTime: true, matchId: matchId });
         }
     });
 }
@@ -1107,24 +1328,6 @@ function resetMatchmakingState() {
     if (matchmakingOptions) {
         matchmakingOptions.classList.remove('hidden');
     }
-}
-
-/**
- * Start match with AI (fallback)
- */
-function startMatchWithAI(matchType) {
-    console.log(`[Matchmaking] Starting ${matchType} match vs AI`);
-    
-    // Stop keep-alive and set offline for AI matches
-    if (matchmakingState.keepAliveInterval) {
-        clearInterval(matchmakingState.keepAliveInterval);
-    }
-    if (matchmakingState.currentUserId) {
-        setUserOffline(matchmakingState.currentUserId);
-    }
-    
-    // Show ready screen
-    showReadyScreen('AI', window.userProfile?.squad?.starters || {});
 }
 
 /**
