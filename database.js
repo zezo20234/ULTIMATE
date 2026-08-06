@@ -36,7 +36,8 @@ const PATHS = {
     STATIC: 'static',
     ONLINE: 'online_users',
     MATCH_STATE: 'match_state', // Real-time match state
-    LOBBIES: 'lobbies' // Friend match lobbies/rooms
+    LOBBIES: 'lobbies', // Friend match lobbies/rooms
+    LOBBIES_CODES: 'lobbies_codes' // Room code to lobby ID mapping
 };
 
 /* ==========================================================================
@@ -63,13 +64,13 @@ export async function createUserProfile(uid, clubName, email) {
             coins: 30000,
             fp: 0
         },
-        rankPoints: 500, // SIMPLE: Store at root level
+        rankPoints: 0, // 10-rank system: 0-999 points (100 points per rank)
         stats: {
             wins: 0,
             draws: 0,
             losses: 0,
-            highestRankPoints: 500,
-            currentRank: 'Amateur III',
+            highestRankPoints: 0,
+            currentRank: 'Amateur',
             coinsEarned: 0,
             packsOpened: 0,
             goalsScored: 0,
@@ -1064,23 +1065,26 @@ export async function deleteMatchState(matchId) {
    ========================================================================== */
 
 /**
- * Create a new lobby
+ * Create a new lobby with room code
  * @param {string} hostId - Host user ID
  * @param {string} hostName - Host club name
  * @param {Object} hostSquad - Host squad data
+ * @param {string} roomCode - 6-character room code
  * @returns {Promise<string>} Lobby ID
  */
-export async function createLobby(hostId, hostName, hostSquad) {
+export async function createLobby(hostId, hostName, hostSquad, roomCode) {
     const lobbyId = `lobby_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}`);
     
     const lobbyData = {
         lobbyId: lobbyId,
+        roomCode: roomCode,
         hostId: hostId,
         hostName: hostName,
         hostSquad: hostSquad,
         status: 'waiting', // waiting, full, in_progress, completed
         createdAt: Date.now(),
+        expiresAt: Date.now() + (15 * 60 * 1000), // 15 minutes expiry
         maxPlayers: 2,
         players: {
             host: {
@@ -1093,8 +1097,72 @@ export async function createLobby(hostId, hostName, hostSquad) {
     };
     
     await set(lobbyRef, lobbyData);
-    console.log('[Database] Created lobby:', lobbyId);
+    
+    // Also index by room code for quick lookup
+    const roomCodeRef = ref(db, `${PATHS.LOBBIES_CODES}/${roomCode}`);
+    await set(roomCodeRef, { lobbyId: lobbyId });
+    
+    console.log('[Database] Created lobby with room code:', roomCode);
     return lobbyId;
+}
+
+/**
+ * Find lobby by room code
+ * @param {string} roomCode - 6-character room code
+ * @returns {Promise<Object|null>} Lobby data or null
+ */
+export async function findLobbyByRoomCode(roomCode) {
+    const roomCodeRef = ref(db, `${PATHS.LOBBIES_CODES}/${roomCode}`);
+    const snapshot = await get(roomCodeRef);
+    
+    if (!snapshot.exists()) {
+        return null;
+    }
+    
+    const { lobbyId } = snapshot.val();
+    return await getLobby(lobbyId);
+}
+
+/**
+ * Join a lobby by room code
+ * @param {string} roomCode - 6-character room code
+ * @param {string} player2Id - Second player ID
+ * @param {string} player2Name - Second player club name
+ * @param {Object} player2Squad - Second player squad data
+ * @returns {Promise<Object|null>} Lobby data if successful, null otherwise
+ */
+export async function joinLobbyByRoomCode(roomCode, player2Id, player2Name, player2Squad) {
+    const lobby = await findLobbyByRoomCode(roomCode);
+    
+    if (!lobby) {
+        console.error('[Database] Lobby not found for room code:', roomCode);
+        return null;
+    }
+    
+    if (lobby.status !== 'waiting') {
+        console.error('[Database] Lobby not accepting players:', lobby.status);
+        return null;
+    }
+    
+    if (Object.keys(lobby.players).length >= lobby.maxPlayers) {
+        console.error('[Database] Lobby is full');
+        return null;
+    }
+    
+    // Add player to lobby
+    const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobby.lobbyId}`);
+    await update(lobbyRef, {
+        [`players/player2`]: {
+            userId: player2Id,
+            clubName: player2Name,
+            squad: player2Squad,
+            ready: false
+        },
+        status: 'full'
+    });
+    
+    console.log('[Database] Player joined lobby by room code:', roomCode);
+    return await getLobby(lobby.lobbyId);
 }
 
 /**
@@ -1210,6 +1278,139 @@ export async function getAvailableLobbies() {
 export async function deleteLobby(lobbyId) {
     const lobbyRef = ref(db, `${PATHS.LOBBIES}/${lobbyId}`);
     await remove(lobbyRef);
+}
+
+/**
+ * Clean up expired lobbies (should be called periodically)
+ * @returns {Promise<void>}
+ */
+export async function cleanupExpiredLobbies() {
+    const lobbiesRef = ref(db, PATHS.LOBBIES);
+    const snapshot = await get(lobbiesRef);
+    
+    if (!snapshot.exists()) return;
+    
+    const lobbies = snapshot.val();
+    const now = Date.now();
+    const updates = {};
+    
+    Object.entries(lobbies).forEach(([lobbyId, lobby]) => {
+        if (lobby.expiresAt && lobby.expiresAt < now) {
+            updates[`${PATHS.LOBBIES}/${lobbyId}`] = null;
+            if (lobby.roomCode) {
+                updates[`${PATHS.LOBBIES_CODES}/${lobby.roomCode}`] = null;
+            }
+        }
+    });
+    
+    if (Object.keys(updates).length > 0) {
+        await update(ref(db), updates);
+        console.log('[Database] Cleaned up expired lobbies');
+    }
+}
+
+/* ==========================================================================
+   RANK POINT MANAGEMENT
+   ========================================================================== */
+
+/**
+ * Update user rank points after a match
+ * @param {string} uid - User ID
+ * @param {number} pointsChange - Points to add (positive) or subtract (negative)
+ * @returns {Promise<boolean>} Success or failure
+ */
+export async function updateRankPoints(uid, pointsChange) {
+    const rankPointsRef = ref(db, `${PATHS.USERS}/${uid}/rankPoints`);
+    const currentRankRef = ref(db, `${PATHS.USERS}/${uid}/stats/currentRank`);
+    const highestRankRef = ref(db, `${PATHS.USERS}/${uid}/stats/highestRankPoints`);
+    
+    let success = true;
+    let newPoints = 0;
+    let oldPoints = 0;
+    
+    await runTransaction(rankPointsRef, (currentPoints) => {
+        if (currentPoints === null) currentPoints = 0;
+        oldPoints = currentPoints;
+        newPoints = Math.max(0, currentPoints + pointsChange);
+        newPoints = Math.min(999, newPoints); // Cap at max rank
+        return newPoints;
+    });
+    
+    if (success) {
+        // Update current rank based on new points
+        const { getRankFromPoints } = await import('./utils.js');
+        const newRank = getRankFromPoints(newPoints);
+        await set(currentRankRef, newRank);
+        
+        // Update highest rank if improved
+        await runTransaction(highestRankRef, (highest) => {
+            if (highest === null) highest = 0;
+            return Math.max(highest, newPoints);
+        });
+        
+        console.log(`[Database] Updated rank points: ${oldPoints} -> ${newPoints} (${newRank})`);
+    }
+    
+    return success;
+}
+
+/**
+ * Get user rank points
+ * @param {string} uid - User ID
+ * @returns {Promise<number>} Current rank points
+ */
+export async function getRankPoints(uid) {
+    const rankPointsRef = ref(db, `${PATHS.USERS}/${uid}/rankPoints`);
+    const snapshot = await get(rankPointsRef);
+    return snapshot.exists() ? snapshot.val() : 0;
+}
+
+/* ==========================================================================
+   MATCH COOLDOWN MANAGEMENT
+   ========================================================================== */
+
+/**
+ * Set match cooldown for user
+ * @param {string} uid - User ID
+ * @param {number} durationMs - Cooldown duration in milliseconds
+ * @returns {Promise<void>}
+ */
+export async function setMatchCooldown(uid, durationMs = 4 * 60 * 1000) {
+    const cooldownRef = ref(db, `${PATHS.USERS}/${uid}/matchCooldownEnd`);
+    const cooldownEnd = Date.now() + durationMs;
+    await set(cooldownRef, cooldownEnd);
+    console.log(`[Database] Set match cooldown for user ${uid}: ${new Date(cooldownEnd).toISOString()}`);
+}
+
+/**
+ * Get match cooldown end time for user
+ * @param {string} uid - User ID
+ * @returns {Promise<number|null>} Cooldown end timestamp or null if not active
+ */
+export async function getMatchCooldown(uid) {
+    const cooldownRef = ref(db, `${PATHS.USERS}/${uid}/matchCooldownEnd`);
+    const snapshot = await get(cooldownRef);
+    if (!snapshot.exists()) return null;
+    
+    const cooldownEnd = snapshot.val();
+    if (Date.now() > cooldownEnd) {
+        // Cooldown expired, clear it
+        await remove(cooldownRef);
+        return null;
+    }
+    
+    return cooldownEnd;
+}
+
+/**
+ * Clear match cooldown for user
+ * @param {string} uid - User ID
+ * @returns {Promise<void>}
+ */
+export async function clearMatchCooldown(uid) {
+    const cooldownRef = ref(db, `${PATHS.USERS}/${uid}/matchCooldownEnd`);
+    await remove(cooldownRef);
+    console.log(`[Database] Cleared match cooldown for user ${uid}`);
 }
 
 /**

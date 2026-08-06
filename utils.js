@@ -224,67 +224,117 @@ export function isValidEmail(email) {
     return re.test(email);
 }
 
+/* ==========================================================================
+   RANK SYSTEM - 10 RANK LADDER (100 POINTS PER RANK)
+   ========================================================================== */
+
 /**
- * Converts rank points to football-style rank label.
- * @param {number} points - Rank points (0-2000)
+ * Converts rank points to football-style rank label (10-rank system).
+ * @param {number} points - Rank points (0-999)
  * @returns {string} Football-style rank label
  */
 export function getRankFromPoints(points) {
-    if (points >= 1900) return 'Champion';
-    if (points >= 1700) return 'Legendary I';
-    if (points >= 1600) return 'Legendary II';
-    if (points >= 1500) return 'Legendary III';
-    if (points >= 1400) return 'World Class I';
-    if (points >= 1300) return 'World Class II';
-    if (points >= 1200) return 'World Class III';
-    if (points >= 1100) return 'Professional I';
-    if (points >= 1000) return 'Professional II';
-    if (points >= 900) return 'Professional III';
-    if (points >= 800) return 'Semi Pro I';
-    if (points >= 700) return 'Semi Pro II';
-    if (points >= 600) return 'Semi Pro III';
-    if (points >= 500) return 'Amateur I';
-    if (points >= 400) return 'Amateur II';
-    return 'Amateur III';
+    if (points >= 900) return 'ZA Champion';
+    if (points >= 800) return 'Mythic';
+    if (points >= 700) return 'Ultimate';
+    if (points >= 600) return 'Champion';
+    if (points >= 500) return 'Legendary';
+    if (points >= 400) return 'Elite';
+    if (points >= 300) return 'World Class';
+    if (points >= 200) return 'Professional';
+    if (points >= 100) return 'Semi-Pro';
+    return 'Amateur';
 }
 
 /**
- * Gets the rank points required for a specific rank.
+ * Gets the rank tier number from points (0-9).
+ * @param {number} points - Rank points (0-999)
+ * @returns {number} Rank tier (0-9)
+ */
+export function getRankTier(points) {
+    return Math.min(Math.floor(points / 100), 9);
+}
+
+/**
+ * Gets the rank points required for a specific rank tier.
+ * @param {number} tier - Rank tier (0-9)
+ * @returns {number} Points required for that tier
+ */
+export function getPointsForTier(tier) {
+    return tier * 100;
+}
+
+/**
+ * Gets the rank points required for a specific rank label.
  * @param {string} rank - The rank label
- * @returns {number} Minimum points required for the rank
+ * @returns {number} Points required
  */
 export function getPointsForRank(rank) {
-    const rankRequirements = {
-        'Champion': 1900,
-        'Legendary I': 1700,
-        'Legendary II': 1600,
-        'Legendary III': 1500,
-        'World Class I': 1400,
-        'World Class II': 1300,
-        'World Class III': 1200,
-        'Professional I': 1100,
-        'Professional II': 1000,
-        'Professional III': 900,
-        'Semi Pro I': 800,
-        'Semi Pro II': 700,
-        'Semi Pro III': 600,
-        'Amateur I': 500,
-        'Amateur II': 400,
-        'Amateur III': 0
+    const rankMap = {
+        'Amateur': 0,
+        'Semi-Pro': 100,
+        'Professional': 200,
+        'World Class': 300,
+        'Elite': 400,
+        'Legendary': 500,
+        'Champion': 600,
+        'Ultimate': 700,
+        'Mythic': 800,
+        'ZA Champion': 900
     };
-    return rankRequirements[rank] || 0;
+    return rankMap[rank] || 0;
 }
 
 /**
- * Gets the CSS class for a rank (for styling purposes).
+ * Gets points remaining until next rank promotion.
+ * @param {number} points - Current rank points
+ * @returns {number} Points needed for next rank (0 if at max rank)
+ */
+export function getPointsToNextRank(points) {
+    if (points >= 900) return 0; // Max rank
+    const nextTier = Math.floor(points / 100) + 1;
+    return (nextTier * 100) - points;
+}
+
+/**
+ * Gets points progress within current rank (0-99).
+ * @param {number} points - Current rank points
+ * @returns {number} Progress within current rank
+ */
+export function getRankProgress(points) {
+    return points % 100;
+}
+
+/**
+ * Gets CSS class for rank styling.
  * @param {string} rank - The rank label
  * @returns {string} CSS class name
  */
 export function getRankClass(rank) {
-    if (rank.includes('Champion')) return 'rank-champion';
-    if (rank.includes('Legendary')) return 'rank-legendary';
-    if (rank.includes('World Class')) return 'rank-world-class';
-    if (rank.includes('Professional')) return 'rank-professional';
-    if (rank.includes('Semi Pro')) return 'rank-semi-pro';
-    return 'rank-amateur';
+    const rankMap = {
+        'Amateur': 'rank-amateur',
+        'Semi-Pro': 'rank-semipro',
+        'Professional': 'rank-professional',
+        'World Class': 'rank-worldclass',
+        'Elite': 'rank-elite',
+        'Legendary': 'rank-legendary',
+        'Champion': 'rank-champion',
+        'Ultimate': 'rank-ultimate',
+        'Mythic': 'rank-mythic',
+        'ZA Champion': 'rank-zachampion'
+    };
+    return rankMap[rank] || 'rank-amateur';
+}
+
+/**
+ * Generates a random room code for friend matches.
+ * @returns {string} 6-character alphanumeric code
+ */
+export function generateRoomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 to avoid confusion
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
 }

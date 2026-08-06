@@ -13,7 +13,7 @@ import { searchMarket, buyNow } from './market.js';
 import { formatCoins, getRankFromPoints, getRankClass, getPointsForRank } from './utils.js';
 import { seedDatabase, startAIMarketActivity, startMaintenanceTasks } from './seedingService.js';
 import { initializeMatch, cleanupMatch } from './match.js';
-import { startMatchmaking, cancelMatchmaking, checkExistingQueue } from './matchmaking.js';
+import { startMatchmaking, cancelMatchmaking, checkExistingQueue, initPlayMenu } from './matchmaking.js';
 import { quickSellPlayer, listPlayerOnMarket } from './database.js';
 
 // Global App State
@@ -46,84 +46,69 @@ const clubNameDisplays = document.querySelectorAll('.user-club-name');
    APPLICATION BOOTSTRAP
    ========================================================================== */
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     console.log('[App Controller] Initializing Ultimate Team Application...');
     
     try {
-        // Register Service Worker for PWA
-        if ('serviceWorker' in navigator) {
-            try {
-                await navigator.serviceWorker.register('./service-worker.js');
-                console.log('[App Controller] Service Worker registered');
-            } catch (error) {
-                console.log('[App Controller] Service Worker registration failed:', error);
-            }
-        }
+        // Bind Global UI Events & Listeners FIRST
+        bindAuthForms();
+        bindNavigationEvents();
+        bindGlobalEvents();
         
-        // 1. Preload the master player database from Firebase or local cache
-        const loaded = await loadPlayerDatabase();
-        if (!loaded) {
-            showToast('Warning: Failed to load master player database. Some features may break.', 'error');
-        }
-
-        // 2. Initialize pack store if needed
-        await initializePackStore();
-
-        // 3. Seed database with initial data
-        await seedDatabase();
-
-        // 4. Start AI market activity
-        startAIMarketActivity();
-
-        // 5. Start maintenance tasks
-        startMaintenanceTasks();
-
-        // 6. Initialize Auth State Listener
+        // Initialize Auth State Listener
         initAuthStateListener(
             async (user) => {
                 // ON LOGIN
                 currentUser = user;
-                window.currentUser = user; // Make available globally for match system
-                window.userProfile = null; // Reset profile
+                window.currentUser = user;
+                window.userProfile = null;
                 console.log('[App Controller] Authenticated as: ' + user.uid);
                 
                 // Show header nav
                 if (appHeader) appHeader.classList.remove('hidden');
 
                 // Fetch profile data
-                userProfile = await getUserProfile(user.uid);
-                window.userProfile = userProfile; // Make available globally for match system
+                try {
+                    userProfile = await getUserProfile(user.uid);
+                    window.userProfile = userProfile;
+                } catch (error) {
+                    console.error('[App Controller] Error fetching profile:', error);
+                }
                 
                 // Ensure user is set as online
                 try {
                     await setUserOnline(user.uid);
-                    console.log('[App Controller] User set as online after login');
                 } catch (error) {
                     console.error('[App Controller] Error setting user online:', error);
                 }
                 
                 // Give starter pack if not received yet
                 if (userProfile && !userProfile.hasReceivedStarterPack) {
-                    const { giveStarterPack } = await import('./database.js');
-                    await giveStarterPack(user.uid);
-                    // Reload profile after giving pack
-                    userProfile = await getUserProfile(user.uid);
-                    window.userProfile = userProfile;
+                    try {
+                        const { giveStarterPack } = await import('./database.js');
+                        await giveStarterPack(user.uid);
+                        userProfile = await getUserProfile(user.uid);
+                        window.userProfile = userProfile;
+                    } catch (error) {
+                        console.error('[App Controller] Error giving starter pack:', error);
+                    }
                 }
                 
                 // Setup real-time listeners for coins
                 if (coinListenerUnsub) coinListenerUnsub();
-                coinListenerUnsub = listenToUserCoins(user.uid, (newCoins) => {
-                    if (userProfile && userProfile.economy) {
-                        userProfile.economy.coins = newCoins;
-                    }
-                    updateCoinUI(newCoins);
-                });
+                try {
+                    coinListenerUnsub = listenToUserCoins(user.uid, (newCoins) => {
+                        if (userProfile && userProfile.economy) {
+                            userProfile.economy.coins = newCoins;
+                        }
+                        updateCoinUI(newCoins);
+                    });
+                } catch (error) {
+                    console.error('[App Controller] Error setting up coin listener:', error);
+                }
 
                 updateHeaderUI();
                 switchScreen('dashboard');
-                
-                // Start periodic data refresh
                 startDataRefresh();
             },
             () => {
@@ -131,47 +116,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                 currentUser = null;
                 userProfile = null;
                 if (coinListenerUnsub) coinListenerUnsub();
-                
-                // Stop data refresh
                 stopDataRefresh();
-                
-                // Hide header nav
                 if (appHeader) appHeader.classList.add('hidden');
-                
                 switchScreen('auth');
             }
         );
 
-        // 7. Bind Global UI Events & Listeners
-        bindAuthForms();
-        bindNavigationEvents();
-        bindGlobalEvents();
-        
-        // 8. Check for existing matchmaking queue
-        checkExistingQueue();
-        
-        // 9. Simulate loading progress
-        simulateLoadingProgress();
-        
-        // 10. Hide initial loader after loading completes (reduced timeout)
+        // Load everything else in background with no blocking
         setTimeout(() => {
-            const loader = document.getElementById('initial-loader');
-            if (loader) {
-                loader.style.opacity = '0';
-                setTimeout(() => loader.remove(), 500);
+            // Load player database
+            loadPlayerDatabase().catch(err => {
+                console.warn('[App Controller] Failed to load player database:', err);
+            });
+            
+            // Initialize pack store
+            initializePackStore().catch(err => {
+                console.warn('[App Controller] Failed to initialize pack store:', err);
+            });
+            
+            // Seed database
+            seedDatabase().catch(err => {
+                console.warn('[App Controller] Failed to seed database:', err);
+            });
+            
+            // Start background services
+            try {
+                startAIMarketActivity();
+                startMaintenanceTasks();
+            } catch (error) {
+                console.warn('[App Controller] Failed to start background services:', error);
             }
-            console.log('[App Controller] Loader hidden');
-        }, 1000);
+            
+            // Check for existing matchmaking queue
+            checkExistingQueue();
+        }, 100);
+        
     } catch (error) {
         console.error('[App Controller] Error during initialization:', error);
         showToast('Error loading application. Please refresh.', 'error');
-        
-        // Force hide loader on error
-        const loader = document.getElementById('initial-loader');
-        if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(() => loader.remove(), 500);
-        }
     }
 });
 
@@ -1488,35 +1470,8 @@ function initMatchmakingScreen() {
     // Check for existing queue
     checkExistingQueue();
     
-    // Update online users display and start real-time monitoring
-    updateOnlineUsersDisplay();
-    startOnlineUsersMonitoring();
-    
-    // Bind matchmaking buttons
-    const rankedBtn = document.querySelector('.ranked-btn');
-    const unrankedBtn = document.querySelector('.unranked-btn');
-    const friendBtn = document.querySelector('.friend-btn');
-    const cancelBtn = document.getElementById('cancel-search-btn');
-    
-    if (rankedBtn) {
-        rankedBtn.addEventListener('click', () => {
-            startMatchmaking('ranked');
-        });
-    }
-    
-    if (unrankedBtn) {
-        unrankedBtn.addEventListener('click', () => {
-            startMatchmaking('unranked');
-        });
-    }
-    
-
-    
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-            cancelMatchmaking();
-        });
-    }
+    // Initialize the new play menu
+    initPlayMenu();
 }
 
 /* ==========================================================================

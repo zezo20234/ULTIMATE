@@ -3,9 +3,10 @@
    2-minute real-time matches, ball-only field, stat-based simulation
    ========================================================================== */
 
-import { getUserProfile, updateData, updateMatchState, addMatchEvent, addMatchGoal, switchTurn, completeMatch, deleteMatchState, listenToMatchState } from './database.js';
+import { getUserProfile, updateData, updateMatchState, addMatchEvent, addMatchGoal, switchTurn, completeMatch, deleteMatchState, listenToMatchState, updateRankPoints, setMatchCooldown } from './database.js';
 import { db } from './firebase.js';
 import { ref, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { getRankTier } from './utils.js';
 
 // Database paths
 const PATHS = {
@@ -77,17 +78,26 @@ let matchState = {
     penaltyTeam: null
 };
 
-// AI Opponent Data (balanced range of difficulties)
-const AI_TEAMS = [
-    { name: 'Amateur FC', rating: 55, attack: 52, defense: 50, midfield: 54, aggression: 40, chemistry: 45 },
-    { name: 'Beginner United', rating: 60, attack: 56, defense: 54, midfield: 58, aggression: 45, chemistry: 50 },
-    { name: 'Rookie Town', rating: 65, attack: 60, defense: 58, midfield: 62, aggression: 50, chemistry: 55 },
-    { name: 'Novice City', rating: 70, attack: 66, defense: 64, midfield: 68, aggression: 55, chemistry: 60 },
-    { name: 'Starter FC', rating: 75, attack: 72, defense: 70, midfield: 74, aggression: 60, chemistry: 65 },
-    { name: 'Practice XI', rating: 80, attack: 78, defense: 76, midfield: 79, aggression: 65, chemistry: 70 },
-    { name: 'Training Ground', rating: 85, attack: 84, defense: 82, midfield: 84, aggression: 70, chemistry: 75 },
-    { name: 'Amateur XI', rating: 90, attack: 90, defense: 88, midfield: 89, aggression: 75, chemistry: 80 }
-];
+// AI Opponent Data (rank-scaled - 10 tiers)
+const AI_TEAMS_BY_RANK = {
+    // Tier 0-2: Amateur, Semi-Pro, Professional (Low ranks)
+    0: { name: 'Amateur FC', rating: 55, attack: 52, defense: 50, midfield: 54, aggression: 40, chemistry: 45, decisionMaking: 40, reactionTime: 0.8 },
+    1: { name: 'Beginner United', rating: 60, attack: 56, defense: 54, midfield: 58, aggression: 45, chemistry: 50, decisionMaking: 45, reactionTime: 0.75 },
+    2: { name: 'Rookie Town', rating: 65, attack: 60, defense: 58, midfield: 62, aggression: 50, chemistry: 55, decisionMaking: 50, reactionTime: 0.7 },
+    
+    // Tier 3-5: World Class, Elite, Legendary (Medium ranks)
+    3: { name: 'Novice City', rating: 70, attack: 66, defense: 64, midfield: 68, aggression: 55, chemistry: 60, decisionMaking: 55, reactionTime: 0.65 },
+    4: { name: 'Starter FC', rating: 75, attack: 72, defense: 70, midfield: 74, aggression: 60, chemistry: 65, decisionMaking: 60, reactionTime: 0.6 },
+    5: { name: 'Practice XI', rating: 80, attack: 78, defense: 76, midfield: 79, aggression: 65, chemistry: 70, decisionMaking: 65, reactionTime: 0.55 },
+    
+    // Tier 6-8: Champion, Ultimate, Mythic (High ranks)
+    6: { name: 'Training Ground', rating: 85, attack: 84, defense: 82, midfield: 84, aggression: 70, chemistry: 75, decisionMaking: 70, reactionTime: 0.5 },
+    7: { name: 'Elite Academy', rating: 90, attack: 90, defense: 88, midfield: 89, aggression: 75, chemistry: 80, decisionMaking: 75, reactionTime: 0.45 },
+    8: { name: 'Champion XI', rating: 93, attack: 92, defense: 91, midfield: 92, aggression: 80, chemistry: 85, decisionMaking: 80, reactionTime: 0.4 },
+    
+    // Tier 9: ZA Champion (Max rank)
+    9: { name: 'ZA Champion Team', rating: 96, attack: 95, defense: 94, midfield: 95, aggression: 85, chemistry: 90, decisionMaking: 85, reactionTime: 0.35 }
+};
 
 /**
  * Initialize a new match
@@ -152,27 +162,26 @@ export async function initializeMatch(matchType = 'unranked', opponent = null) {
             matchState.isRealOpponent = true;
             matchState.opponentId = opponent.opponentId;
         } else {
-            // Select AI team based on user's team rating for balanced difficulty
-            const userRating = matchState.homeTeam.rating;
-            let aiTemplate;
+            // Select AI team based on user's rank for scaled difficulty
+            const userRankPoints = opponent?.rankPoints || 0;
+            const userRankTier = getRankTier(userRankPoints);
             
-            if (userRating >= 90) {
-                // Strong team - give them a challenging opponent
-                aiTemplate = AI_TEAMS[Math.floor(Math.random() * 2)]; // Top 2 teams
-            } else if (userRating >= 85) {
-                // Good team - medium opponent
-                aiTemplate = AI_TEAMS[Math.floor(Math.random() * 4)]; // Top 4 teams
-            } else if (userRating >= 80) {
-                // Decent team - lower opponent
-                aiTemplate = AI_TEAMS[Math.floor(Math.random() * 6)]; // Top 6 teams
-            } else {
-                // Average/weak team - weakest opponents
-                aiTemplate = AI_TEAMS[Math.floor(Math.random() * AI_TEAMS.length)];
-            }
+            // Get AI template for this rank tier
+            let aiTemplate = AI_TEAMS_BY_RANK[userRankTier] || AI_TEAMS_BY_RANK[0];
+            
+            // Add some variance within the same tier (±5 rating)
+            const variance = Math.floor(Math.random() * 10) - 5;
+            aiTemplate = {
+                ...aiTemplate,
+                rating: Math.max(50, Math.min(99, aiTemplate.rating + variance))
+            };
+            
+            console.log(`[Match Engine] AI opponent for rank tier ${userRankTier}:`, aiTemplate);
             
             matchState.awayTeam = generateAITeam(aiTemplate);
             matchState.isRealOpponent = false;
             matchState.opponentId = null;
+            matchState.aiRankTier = userRankTier;
         }
 
         matchState.isRanked = matchType === 'ranked';
@@ -1797,26 +1806,63 @@ async function showMatchResults() {
     const playerOfMatch = determinePlayerOfMatch();
     document.getElementById('player-of-match').textContent = playerOfMatch;
     
-    // Calculate rewards
-    const winBonus = matchState.homeScore > matchState.awayScore ? 500 : (matchState.homeScore < matchState.awayScore ? 200 : 350);
-    const goalBonus = matchState.homeScore * 100;
-    const totalCoins = winBonus + goalBonus;
-    const rankPoints = matchState.isRanked ? (matchState.homeScore > matchState.awayScore ? 25 : (matchState.homeScore < matchState.awayScore ? -15 : 5)) : 0;
+    // Calculate rewards based on match type and result
+    let coinReward = 0;
+    let rankPointsChange = 0;
     
-    document.getElementById('reward-coins').textContent = totalCoins;
+    if (matchState.isRanked) {
+        // Ranked rewards
+        if (matchState.homeScore > matchState.awayScore) {
+            coinReward = 1000; // Win bonus
+            rankPointsChange = 25; // Win points
+        } else if (matchState.homeScore < matchState.awayScore) {
+            coinReward = 300; // Loss consolation
+            rankPointsChange = -15; // Loss points
+        } else {
+            coinReward = 500; // Draw
+            rankPointsChange = 5; // Draw points
+        }
+    } else {
+        // Unranked/Friend rewards
+        if (matchState.homeScore > matchState.awayScore) {
+            coinReward = 500; // Win bonus
+        } else if (matchState.homeScore < matchState.awayScore) {
+            coinReward = 200; // Loss consolation
+        } else {
+            coinReward = 350; // Draw
+        }
+    }
+    
+    // Goal bonus
+    const goalBonus = matchState.homeScore * 50;
+    coinReward += goalBonus;
+    
+    document.getElementById('reward-coins').textContent = coinReward;
     document.getElementById('reward-xp').textContent = '0';
-    document.getElementById('reward-rank-points').textContent = rankPoints > 0 ? '+' + rankPoints : rankPoints;
+    document.getElementById('reward-rank-points').textContent = matchState.isRanked ? (rankPointsChange > 0 ? '+' + rankPointsChange : rankPointsChange) : 'N/A';
     document.getElementById('reward-pack-progress').textContent = '0%';
     document.getElementById('reward-club-xp').textContent = '0';
     
-    // Hide cooldown section and show return button
+    // Show cooldown for ranked/unranked
     const cooldownSection = document.getElementById('cooldown-section');
     const returnBtn = document.getElementById('return-to-menu-btn');
-    if (cooldownSection) cooldownSection.style.display = 'none';
-    if (returnBtn) returnBtn.style.display = 'block';
+    
+    if (matchState.isRanked || matchState.matchType === 'unranked') {
+        if (cooldownSection) {
+            cooldownSection.style.display = 'block';
+            cooldownSection.innerHTML = `
+                <p class="text-muted">Cooldown active for 4 minutes</p>
+                <div class="cooldown-timer" id="post-match-cooldown">4:00</div>
+            `;
+        }
+        if (returnBtn) returnBtn.style.display = 'none';
+    } else {
+        if (cooldownSection) cooldownSection.style.display = 'none';
+        if (returnBtn) returnBtn.style.display = 'block';
+    }
     
     // Actually award rewards to user
-    await awardRewards(totalCoins, 0, rankPoints);
+    await awardRewards(coinReward, 0, rankPointsChange);
     
     // Bind return to menu button
     if (returnBtn) {
@@ -1858,43 +1904,34 @@ async function showMatchResults() {
 }
 
 /**
- * Award rewards to user - Using Transaction for rank points
+ * Award rewards to user - Using new database functions
  */
-async function awardRewards(coins, xp, rankPoints) {
+async function awardRewards(coins, xp, rankPointsChange) {
     try {
         const currentUser = window.currentUser;
         if (!currentUser) return;
         
-        const { getUserProfile, updateCoinsTransaction } = await import('./database.js');
-        const { runTransaction } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js");
-        const { db } = await import('./firebase.js');
+        const { getUserProfile, updateCoinsTransaction, updateRankPoints, setMatchCooldown, getRankFromPoints } = await import('./database.js');
         
         const profile = await getUserProfile(currentUser.uid);
         
         if (profile) {
-            console.log('[Match Engine] Current profile:', { rankPoints: profile.rankPoints, economyRankPoints: profile.economy?.rankPoints, statsRankPoints: profile.stats?.rankPoints });
+            console.log('[Match Engine] Awarding rewards:', { coins, rankPointsChange });
             
             // Update coins using transaction
             await updateCoinsTransaction(currentUser.uid, coins);
             
-            // Update rank points using transaction (like coins)
-            const rankPointsRef = ref(db, 'users/' + currentUser.uid + '/rankPoints');
-            let rankUpdateSuccess = true;
+            // Update rank points if ranked match
+            if (matchState.isRanked && rankPointsChange !== 0) {
+                await updateRankPoints(currentUser.uid, rankPointsChange);
+            }
             
-            await runTransaction(rankPointsRef, (currentRankPoints) => {
-                if (currentRankPoints === null) currentRankPoints = 500; // Initialize if null
-                const newRankPoints = currentRankPoints + rankPoints;
-                console.log('[Match Engine] Transaction: ' + currentRankPoints + ' -> ' + newRankPoints + ' (+' + rankPoints + ')');
-                return newRankPoints;
-            });
-            
-            console.log('[Match Engine] Rank points transaction completed: ' + rankUpdateSuccess);
-            
-            // Reload profile to get updated rank points
+            // Get updated rank points
             const updatedProfile = await getUserProfile(currentUser.uid);
-            const newRankPoints = updatedProfile?.rankPoints || profile.rankPoints + rankPoints;
+            const newRankPoints = updatedProfile?.rankPoints || 0;
+            const newRank = getRankFromPoints(newRankPoints);
             
-            console.log('[Match Engine] New rank points from DB: ' + newRankPoints);
+            console.log('[Match Engine] New rank points:', newRankPoints, 'Rank:', newRank);
             
             // Update stats
             const newStats = {
@@ -1902,6 +1939,7 @@ async function awardRewards(coins, xp, rankPoints) {
                 draws: (profile.stats?.draws || 0) + (matchState.homeScore === matchState.awayScore ? 1 : 0),
                 losses: (profile.stats?.losses || 0) + (matchState.homeScore < matchState.awayScore ? 1 : 0),
                 highestRankPoints: Math.max(profile.stats?.highestRankPoints || 0, newRankPoints),
+                currentRank: newRank,
                 coinsEarned: (profile.stats?.coinsEarned || 0) + coins,
                 goalsScored: (profile.stats?.goalsScored || 0) + matchState.homeScore,
                 goalsConceded: (profile.stats?.goalsConceded || 0) + matchState.awayScore
@@ -1911,17 +1949,55 @@ async function awardRewards(coins, xp, rankPoints) {
             const statsRef = ref(db, 'users/' + currentUser.uid + '/stats');
             await update(statsRef, newStats);
             
+            // Set match cooldown for ranked/unranked
+            if (matchState.isRanked || matchState.matchType === 'unranked') {
+                await setMatchCooldown(currentUser.uid, 4 * 60 * 1000); // 4 minutes
+                startPostMatchCooldown();
+            }
+            
             // Update local profile
             if (window.userProfile) {
                 window.userProfile.rankPoints = newRankPoints;
                 window.userProfile.stats = newStats;
             }
             
-            console.log('[Match Engine] Rewards awarded: ' + coins + ' coins, ' + rankPoints + ' rank points (total: ' + newRankPoints + ')');
+            console.log('[Match Engine] Rewards awarded: ' + coins + ' coins, ' + rankPointsChange + ' rank points (total: ' + newRankPoints + ')');
         }
     } catch (error) {
         console.error('[Match Engine] Error awarding rewards:', error);
     }
+}
+
+/**
+ * Start post-match cooldown timer
+ */
+function startPostMatchCooldown() {
+    const cooldownTimer = document.getElementById('post-match-cooldown');
+    if (!cooldownTimer) return;
+    
+    let remainingSeconds = 4 * 60; // 4 minutes
+    
+    const interval = setInterval(() => {
+        remainingSeconds--;
+        
+        const mins = Math.floor(remainingSeconds / 60);
+        const secs = remainingSeconds % 60;
+        cooldownTimer.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        
+        if (remainingSeconds <= 0) {
+            clearInterval(interval);
+            const returnBtn = document.getElementById('return-to-menu-btn');
+            const cooldownSection = document.getElementById('cooldown-section');
+            
+            if (cooldownSection) cooldownSection.style.display = 'none';
+            if (returnBtn) returnBtn.style.display = 'block';
+            
+            // Bind return button
+            if (returnBtn) {
+                returnBtn.addEventListener('click', handleReturnToMenu);
+            }
+        }
+    }, 1000);
 }
 
 /**
@@ -1992,6 +2068,39 @@ function showCooldownScreen(endTime) {
     if (returnBtn) returnBtn.style.display = 'none';
     
     startCooldownTimer(endTime);
+}
+
+/**
+ * Handle return to menu button click
+ */
+function handleReturnToMenu() {
+    console.log('[Match Engine] Return to menu clicked');
+    document.getElementById('match-results-overlay').classList.add('hidden');
+    
+    // Cleanup match state
+    cleanupMatch();
+    
+    // Switch to dashboard (home) screen
+    const screens = document.querySelectorAll('.app-screen');
+    screens.forEach(screen => screen.classList.add('hidden'));
+    document.getElementById('dashboard-screen').classList.remove('hidden');
+    
+    // Update navigation
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    const dashboardBtn = document.querySelector('[data-target-screen="dashboard"]');
+    if (dashboardBtn) dashboardBtn.classList.add('active');
+    
+    // Refresh rank display to show updated points
+    if (window.updateRankDisplay) {
+        window.updateRankDisplay();
+    }
+    
+    // Reload user profile
+    if (window.currentUser) {
+        window.getUserProfile(window.currentUser.uid).then(profile => {
+            window.userProfile = profile;
+        });
+    }
 }
 
 /**

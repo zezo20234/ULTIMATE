@@ -25,21 +25,13 @@
     <link rel="stylesheet" href="styles.css">
     
     <!-- Scripts -->
-    <script type="module" src="friends.js"></script>
+    <script type="module" src="app.js"></script>
 </head>
 <body>
 
-    <!-- ==========================================================================
-       INITIAL APP LOADER
-       ========================================================================== -->
-    <div id="initial-loader" class="full-screen-overlay" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0b0e14; position: fixed; inset: 0; z-index: 9999; transition: opacity 0.5s;">
-        <i class="fa-solid fa-futbol fa-spin" style="font-size: 3rem; color: #f3c653; margin-bottom: 1rem;"></i>
-        <h2 style="color: white; font-weight: 800; letter-spacing: 2px;">ZA SPORTS</h2>
-        <p style="color: #8b949e; margin-bottom: 1rem;" id="loading-status">Initializing Web App Engine...</p>
-        <div class="loading-bar-container">
-            <div class="loading-bar" id="loading-bar"></div>
-        </div>
-        <p style="color: #8b949e; font-size: 0.85rem; margin-top: 0.5rem;" id="loading-percent">0%</p>
+    <!-- Version Indicator -->
+    <div class="version-indicator">
+        V:0.6
     </div>
 
     <!-- ==========================================================================
@@ -87,7 +79,7 @@
                 <h2><i class="fa-solid fa-user-lock" style="color: var(--fc-neon);"></i> Manager Portal</h2>
                 
                 <!-- Login Form -->
-                <form id="login-form">
+                <form id="login-form" onsubmit="event.preventDefault();">
                     <div class="form-group">
                         <label for="login-email">Email Address</label>
                         <div class="input-icon-wrap">
@@ -108,7 +100,7 @@
                 </form>
 
                 <!-- Register Form (Hidden by default) -->
-                <form id="register-form" class="hidden">
+                <form id="register-form" class="hidden" onsubmit="event.preventDefault();">
                     <div class="form-group">
                         <label for="reg-clubname">Club Name</label>
                         <div class="input-icon-wrap">
@@ -331,77 +323,17 @@
     </main>
 
     <!-- ==========================================================================
-       SCREEN 8: MATCHMAKING
+       SCREEN 8: MATCHMAKING (PLAY MENU)
        ========================================================================== -->
     <main id="matchmaking-screen" class="app-screen hidden">
-        <div class="matchmaking-container">
-            <div class="matchmaking-header">
-                <h2>Play Match</h2>
-                <p class="text-muted">Your Rank: <span id="user-rank-display" class="rank-badge">Amateur</span></p>
-                <p class="text-muted">Rank Points: <span id="user-rank-points">0</span> / <span id="next-rank-points">100</span></p>
-            </div>
-            
-            <!-- Matchmaking Options (default view) -->
+        <div class="play-menu-wrapper">
+            <!-- Play menu content will be injected by matchmaking.js -->
             <div id="matchmaking-options" class="matchmaking-options">
-                <!-- Online Users Display -->
-                <div class="online-users-display" style="margin-bottom: 2rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px;">
-                    <h4 style="color: var(--fc-neon); margin-bottom: 0.5rem;">Online Users</h4>
-                    <div id="online-users-list" style="min-height: 40px;">
-                        <p class="text-muted">Loading online users...</p>
-                    </div>
+                <!-- Initial loading state -->
+                <div class="loading-container">
+                    <i class="fa-solid fa-spinner fa-spin text-gold"></i>
+                    <p class="text-muted mt-4">Loading play menu...</p>
                 </div>
-                
-                <button class="matchmaking-btn ranked-btn" data-match-type="ranked">
-                    <div class="btn-icon">
-                        <i class="fa-solid fa-trophy"></i>
-                    </div>
-                    <div class="btn-content">
-                        <h3>Ranked</h3>
-                        <p>Compete for rank points</p>
-                    </div>
-                </button>
-                
-                <button class="matchmaking-btn unranked-btn" data-match-type="unranked">
-                    <div class="btn-icon">
-                        <i class="fa-solid fa-gamepad"></i>
-                    </div>
-                    <div class="btn-content">
-                        <h3>Unranked</h3>
-                        <p>Play without rank pressure</p>
-                    </div>
-                </button>
-            </div>
-            
-            <!-- Ready Screen (hidden by default) -->
-            <div id="ready-screen-container" class="ready-screen-container hidden">
-                <!-- Ready screen content will be injected here -->
-            </div>
-            
-            <!-- Cooldown Display -->
-            <div class="cooldown-display hidden" id="matchmaking-cooldown">
-                <div class="cooldown-icon">
-                    <i class="fa-solid fa-clock"></i>
-                </div>
-                <div class="cooldown-info">
-                    <h3>Match Cooldown</h3>
-                    <p>Next match available in: <span id="cooldown-timer-display">4:00</span></p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Searching Overlay -->
-        <div class="matchmaking-search-overlay hidden" id="search-overlay">
-            <div class="search-content">
-                <div class="search-animation">
-                    <div class="search-ring"></div>
-                    <div class="search-ring"></div>
-                    <div class="search-ring"></div>
-                </div>
-                <h3 id="search-status">Searching for opponent...</h3>
-                <p class="search-timer" id="search-timer">20</p>
-                <button class="btn btn-secondary cancel-search-btn" id="cancel-search-btn">
-                    <i class="fa-solid fa-xmark"></i> Cancel
-                </button>
             </div>
         </div>
     </main>
