@@ -1,504 +1,507 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0b0e14">
-    <meta name="description" content="Ultimate Team - Build your dream squad, open premium packs, and dominate the market.">
-    <title>Ultimate Team | Web App</title>
 
-    <!-- Google Fonts: Inter for UI, Oswald for Player Cards -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
-    
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Ultimate Team">
-    
-    <!-- FontAwesome Pro Icons (Free CDN fallback) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Premium Stylesheet -->
-    <link rel="stylesheet" href="styles.css">
-    
-    <!-- Scripts -->
-    <script type="module" src="app.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Money Manager</title>
+
+<link rel="manifest" href="manifest.json">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Money Manager">
+
+<style>
+
+*{
+    box-sizing:border-box;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;
+}
+
+body{
+
+    margin:0;
+    min-height:100vh;
+    background:
+    linear-gradient(135deg,#dbeafe,#f5d0fe,#dcfce7);
+
+    padding:20px;
+
+}
+
+
+.container{
+
+    max-width:600px;
+    margin:auto;
+
+}
+
+
+h1{
+
+    text-align:center;
+    font-size:34px;
+    color:#111;
+
+}
+
+
+
+.glass{
+
+    background:rgba(255,255,255,0.45);
+
+    backdrop-filter:blur(25px);
+
+    -webkit-backdrop-filter:blur(25px);
+
+    border:1px solid rgba(255,255,255,.5);
+
+    border-radius:28px;
+
+    padding:20px;
+
+    margin-top:18px;
+
+    box-shadow:
+    0 10px 40px rgba(0,0,0,.12);
+
+}
+
+
+
+.cards{
+
+    display:grid;
+
+    grid-template-columns:repeat(3,1fr);
+
+    gap:12px;
+
+}
+
+
+
+.card{
+
+    text-align:center;
+
+    padding:15px;
+
+    border-radius:22px;
+
+    background:rgba(255,255,255,.55);
+
+    backdrop-filter:blur(20px);
+
+}
+
+
+
+.card h3{
+
+    font-size:14px;
+
+}
+
+
+
+.money{
+
+    font-size:22px;
+
+    font-weight:700;
+
+}
+
+
+
+input,select,button{
+
+    width:100%;
+
+    padding:15px;
+
+    margin-top:12px;
+
+    border-radius:18px;
+
+    border:none;
+
+    font-size:16px;
+
+}
+
+
+
+input,select{
+
+    background:rgba(255,255,255,.7);
+
+}
+
+
+
+button{
+
+    background:#111;
+
+    color:white;
+
+    font-weight:700;
+
+}
+
+
+
+.purchase{
+
+    background:rgba(255,255,255,.5);
+
+    border-radius:18px;
+
+    padding:12px;
+
+    margin-top:10px;
+
+}
+
+
+
+.small{
+
+    color:#555;
+
+    font-size:13px;
+
+}
+
+
+</style>
+
 </head>
+
+
 <body>
 
-    <!-- Version Indicator -->
-    <div class="version-indicator">
-        V:0.6
-    </div>
 
-    <!-- ==========================================================================
-       GLOBAL APP HEADER (Visible when authenticated)
-       ========================================================================== -->
-    <header id="app-header" class="hidden">
-        <div class="brand-logo">
-            <i class="fa-solid fa-shield-halved"></i> ULTIMATE TEAM
-        </div>
-        
-        <nav class="app-nav-links">
-            <button class="nav-btn active" data-target-screen="dashboard"><i class="fa-solid fa-house"></i> Home</button>
-            <button class="nav-btn" data-target-screen="store"><i class="fa-solid fa-store"></i> Store</button>
-            <button class="nav-btn" data-target-screen="market"><i class="fa-solid fa-arrow-right-arrow-left"></i> Transfers</button>
-            <button class="nav-btn" data-target-screen="club"><i class="fa-solid fa-users"></i> Club</button>
-            <button class="nav-btn" data-target-screen="squad"><i class="fa-solid fa-people-group"></i> Squad</button>
-            <button class="nav-btn" data-target-screen="friends"><i class="fa-solid fa-user-group"></i> Friends</button>
-            <button class="nav-btn" data-target-screen="matchmaking"><i class="fa-solid fa-futbol"></i> Play</button>
-            <button class="nav-btn" data-target-screen="admin"><i class="fa-solid fa-cog"></i> Admin</button>
-        </nav>
+<div class="container">
 
-        <div class="user-hud">
-            <div class="hud-item badge">
-                <i class="fa-solid fa-shield"></i> <span class="user-club-name">Loading...</span>
-            </div>
-            <div class="hud-item coins">
-                <i class="fa-solid fa-coins gold-text"></i> <span class="user-coin-balance">0</span>
-            </div>
-            <button class="btn btn-outline logout-btn" title="Logout">
-                <i class="fa-solid fa-right-from-bracket"></i>
-            </button>
-        </div>
-    </header>
 
-    <!-- ==========================================================================
-       SCREEN 1: AUTHENTICATION
-       ========================================================================== -->
-    <main id="auth-screen" class="app-screen">
-        <div class="auth-wrapper">
-            <div class="auth-hero">
-                <h1>Build Your Dream Squad.</h1>
-                <p>Trade, open packs, and compete in the ultimate football ecosystem.</p>
-            </div>
-            <div class="auth-card">
-                <h2><i class="fa-solid fa-user-lock" style="color: var(--fc-neon);"></i> Manager Portal</h2>
-                
-                <!-- Login Form -->
-                <form id="login-form" onsubmit="event.preventDefault();">
-                    <div class="form-group">
-                        <label for="login-email">Email Address</label>
-                        <div class="input-icon-wrap">
-                            <i class="fa-solid fa-envelope"></i>
-                            <input type="email" id="login-email" required placeholder="manager@fut.com" autocomplete="email">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="login-password">Password</label>
-                        <div class="input-icon-wrap">
-                            <i class="fa-solid fa-lock"></i>
-                            <input type="password" id="login-password" required placeholder="•••••••••" autocomplete="current-password">
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-large">
-                        <i class="fa-solid fa-right-to-bracket"></i> Secure Login
-                    </button>
-                </form>
+<h1>💰 Money Manager</h1>
 
-                <!-- Register Form (Hidden by default) -->
-                <form id="register-form" class="hidden" onsubmit="event.preventDefault();">
-                    <div class="form-group">
-                        <label for="reg-clubname">Club Name</label>
-                        <div class="input-icon-wrap">
-                            <i class="fa-solid fa-shield"></i>
-                            <input type="text" id="reg-clubname" required placeholder="e.g. FC Legends" maxlength="15">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="reg-email">Email Address</label>
-                        <div class="input-icon-wrap">
-                            <i class="fa-solid fa-envelope"></i>
-                            <input type="email" id="reg-email" required placeholder="manager@fut.com" autocomplete="email">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="reg-password">Password</label>
-                        <div class="input-icon-wrap">
-                            <i class="fa-solid fa-lock"></i>
-                            <input type="password" id="reg-password" required placeholder="Minimum 6 characters" minlength="6" autocomplete="new-password">
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-large">
-                        <i class="fa-solid fa-user-plus"></i> Establish Club
-                    </button>
-                </form>
 
-                <div class="auth-divider"><span>OR</span></div>
-                
-                <button type="button" id="toggle-auth-mode" class="btn btn-secondary" style="width: 100%;">
-                    Create New Club Instead
-                </button>
-            </div>
-        </div>
-    </main>
+<div class="glass">
 
-    <!-- ==========================================================================
-       SCREEN 2: DASHBOARD (Home)
-       ========================================================================== -->
-    <main id="dashboard-screen" class="app-screen hidden">
-        <section class="dashboard-header">
-            <div>
-                <h1 class="welcome-text">Welcome Back, <span class="user-club-name text-gold">Manager</span></h1>
-                <p class="text-muted">Season 1 is active. Daily objectives reset in 12 hours.</p>
-            </div>
-        </section>
-        
-        <div class="dashboard-grid">
-            <div class="dash-card store-promo" data-target-screen="store">
-                <div class="card-content">
-                    <h3><i class="fa-solid fa-bolt"></i> Promo Packs Available</h3>
-                    <p>New Team of the Week cards are in packs now. Test your luck!</p>
-                    <button class="btn btn-primary">Go to Store</button>
-                </div>
-            </div>
-            
-            <div class="dash-card match-promo" data-target-screen="matchmaking">
-                <div class="card-content">
-                    <h3><i class="fa-solid fa-futbol"></i> Ranked Matches</h3>
-                    <p>Climb the ladder and earn exclusive rewards. Matches are 4 minutes.</p>
-                    <button class="btn btn-primary">Play Ranked</button>
-                </div>
-            </div>
-            
-            <div class="dash-card squad-promo" data-target-screen="squad">
-                <div class="card-content">
-                    <h3><i class="fa-solid fa-users"></i> Build Your Squad</h3>
-                    <p>Your current squad rating: <span class="text-gold">75</span></p>
-                    <button class="btn btn-primary">Manage Squad</button>
-                </div>
-            </div>
-        </div>
-    </main>
 
-    <!-- ==========================================================================
-       SCREEN 3: STORE
-       ========================================================================== -->
-    <main id="store-screen" class="app-screen hidden">
-        <div class="store-container">
-            <div class="store-header">
-                <h2>Pack Store</h2>
-                <p class="text-muted">Open packs to build your dream squad</p>
-            </div>
-            
-            <div class="packs-grid" id="packs-grid">
-                <!-- Packs will be loaded dynamically -->
-            </div>
-        </div>
-    </main>
+<div class="cards">
 
-    <!-- ==========================================================================
-       SCREEN 4: MARKET
-       ========================================================================== -->
-    <main id="market-screen" class="app-screen hidden">
-        <div class="market-container">
-            <div class="market-header">
-                <h2>Transfer Market</h2>
-                <p class="text-muted">Buy and sell players with the community</p>
-            </div>
-            
-            <div class="market-search">
-                <input type="text" id="market-search-input" class="search-input" placeholder="Search players...">
-                <button id="market-search-btn" class="btn btn-primary">Search</button>
-            </div>
-            
-            <div class="market-tabs">
-                <button class="market-tab active" data-tab="buy">Buy Players</button>
-                <button class="market-tab" data-tab="sell">Sell Players</button>
-            </div>
-            
-            <div class="market-content" id="market-content">
-                <!-- Market listings will be loaded here -->
-            </div>
-        </div>
-    </main>
 
-    <!-- ==========================================================================
-       SCREEN 5: CLUB
-       ========================================================================== -->
-    <main id="club-screen" class="app-screen hidden">
-        <div class="club-container">
-            <div class="club-header">
-                <h2>My Club</h2>
-                <p class="text-muted">Manage your player collection</p>
-            </div>
-            
-            <div class="club-stats">
-                <div class="stat-item">
-                    <span class="stat-value" id="club-player-count">0</span>
-                    <span class="stat-label">Players</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="club-total-rating">0</span>
-                    <span class="stat-label">Avg Rating</span>
-                </div>
-            </div>
-            
-            <div class="club-grid" id="club-grid">
-                <!-- Players will be loaded here -->
-            </div>
-        </div>
-    </main>
+<div class="card">
 
-    <!-- ==========================================================================
-       SCREEN 6: SQUAD
-       ========================================================================== -->
-    <main id="squad-screen" class="app-screen hidden">
-        <div class="squad-container">
-            <div class="squad-header">
-                <h2>Squad Builder</h2>
-                <p class="text-muted">Build your starting eleven</p>
-            </div>
-            
-            <div class="squad-info">
-                <div class="squad-stat">
-                    <span class="stat-label">Players:</span>
-                    <span class="stat-value" id="player-count">0/11</span>
-                </div>
-                <div class="squad-stat">
-                    <span class="stat-label">Rating:</span>
-                    <span class="stat-value" id="squad-rating">0</span>
-                </div>
-            </div>
-            
-            <div class="formation-selector">
-                <label>Formation:</label>
-                <select id="formation-select" class="search-input">
-                    <option value="4-3-3">4-3-3</option>
-                    <option value="4-4-2">4-4-2</option>
-                    <option value="4-5-1">4-5-1</option>
-                    <option value="3-5-2">3-5-2</option>
-                    <option value="3-4-3">3-4-3</option>
-                </select>
-            </div>
-            
-            <div class="pitch-container">
-                <div class="football-pitch" id="football-pitch">
-                    <!-- Formation positions will be rendered here -->
-                </div>
-            </div>
-        </div>
-    </main>
+<h3>🍔 Hangout</h3>
 
-    <!-- ==========================================================================
-       SCREEN 7: FRIENDS
-       ========================================================================== -->
-    <main id="friends-screen" class="app-screen hidden">
-        <div class="friends-container">
-            <div class="friends-header">
-                <h2>Friends</h2>
-                <p class="text-muted">Add friends and play matches together</p>
-            </div>
-            
-            <div class="friends-sections">
-                <!-- Friend Requests -->
-                <div class="friends-section">
-                    <h3>Friend Requests</h3>
-                    <div id="friend-requests-list">
-                        <p class="text-muted">No pending friend requests</p>
-                    </div>
-                </div>
-                
-                <!-- Add Friend -->
-                <div class="friends-section">
-                    <h3>Add Friend</h3>
-                    <div class="add-friend-form">
-                        <input type="text" id="friend-email-input" class="search-input" placeholder="Enter friend's email" />
-                        <button id="send-friend-request-btn" class="btn btn-primary">Send Request</button>
-                    </div>
-                </div>
-                
-                <!-- Friends List -->
-                <div class="friends-section">
-                    <h3>My Friends</h3>
-                    <div id="friends-list">
-                        <p class="text-muted">No friends yet. Add some friends to play with!</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
+<div class="money" id="hangout">65</div>
 
-    <!-- ==========================================================================
-       SCREEN 8: MATCHMAKING (PLAY MENU)
-       ========================================================================== -->
-    <main id="matchmaking-screen" class="app-screen hidden">
-        <div class="play-menu-wrapper">
-            <!-- Play menu content will be injected by matchmaking.js -->
-            <div id="matchmaking-options" class="matchmaking-options">
-                <!-- Initial loading state -->
-                <div class="loading-container">
-                    <i class="fa-solid fa-spinner fa-spin text-gold"></i>
-                    <p class="text-muted mt-4">Loading play menu...</p>
-                </div>
-            </div>
-        </div>
-    </main>
+SAR
 
-    <!-- ==========================================================================
-       SCREEN 9: MATCH PLAY
-       ========================================================================== -->
-    <main id="match-screen" class="app-screen hidden">
-        <div class="match-container">
-            <!-- Scoreboard -->
-            <div class="scoreboard">
-                <div class="scoreboard-team home">
-                    <div class="team-name" id="match-home-name">Home Team</div>
-                    <div class="team-score" id="match-home-score">0</div>
-                </div>
-                <div class="scoreboard-center">
-                    <div class="match-time" id="match-time">0'</div>
-                </div>
-                <div class="scoreboard-team away">
-                    <div class="team-name" id="match-away-name">Away Team</div>
-                    <div class="team-score" id="match-away-score">0</div>
-                </div>
-            </div>
+</div>
 
-            <!-- Football Field -->
-            <div class="field-container">
-                <div class="football-field" id="football-field">
-                    <!-- Field markings -->
-                    <div class="field-markings">
-                        <div class="halfway-line"></div>
-                        <div class="center-circle"></div>
-                        <div class="center-spot"></div>
-                        <div class="penalty-box-left"></div>
-                        <div class="penalty-box-right"></div>
-                        <div class="goal-area-left"></div>
-                        <div class="goal-area-right"></div>
-                        <div class="goal-left"></div>
-                        <div class="goal-right"></div>
-                    </div>
-                    
-                    <!-- Ball -->
-                    <div class="ball" id="ball"></div>
-                    
-                    <!-- Goal Indicators -->
-                    <div class="goal-indicator home-goal hidden" id="home-goal-indicator">
-                        <div class="goal-score" id="home-goal-score">0</div>
-                    </div>
-                    <div class="goal-indicator away-goal hidden" id="away-goal-indicator">
-                        <div class="goal-score" id="away-goal-score">0</div>
-                    </div>
-                    
-                    <!-- Attack Banner -->
-                    <div class="attack-banner hidden" id="attack-banner">
-                        <i class="fa-solid fa-bolt"></i>
-                        <span>Attack for <span id="attack-team">Team</span></span>
-                    </div>
-                    
-                    <!-- Goal Banner -->
-                    <div class="goal-banner hidden" id="goal-banner">
-                        <div class="goal-icon">⚽</div>
-                        <div class="goal-text">GOAL!</div>
-                        <div class="goal-scorer" id="goal-scorer">Player</div>
-                        <div class="goal-assist" id="goal-assist">Assist: Player</div>
-                        <div class="goal-minute" id="goal-minute">45'</div>
-                    </div>
-                    
-                    <!-- Half-Time Banner -->
-                    <div class="halftime-banner hidden" id="halftime-banner">
-                        <div class="halftime-text">HALF TIME</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
 
-    <!-- ==========================================================================
-       SCREEN 10: ADMIN
-       ========================================================================== -->
-    <main id="admin-screen" class="app-screen hidden">
-        <div class="admin-container">
-            <div class="admin-header">
-                <h2>Admin Panel</h2>
-                <p class="text-muted">Manage database and settings</p>
-            </div>
-            
-            <div class="admin-nav">
-                <button class="admin-nav-item active" data-admin-section="players">Players</button>
-                <button class="admin-nav-item" data-admin-section="packs">Packs</button>
-                <button class="admin-nav-item" data-admin-section="settings">Settings</button>
-            </div>
-            
-            <div class="admin-content">
-                <!-- Players Section -->
-                <div id="admin-players" class="admin-section active">
-                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">PLAYER MANAGEMENT</h2>
-                    <div class="flex gap-4 mb-4">
-                        <input type="text" id="admin-player-search" class="search-input" placeholder="Search players...">
-                        <button id="admin-player-search-btn" class="btn btn-primary">Search</button>
-                    </div>
-                    <div id="admin-players-table">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Name</th>
-                                    <th>Rating</th>
-                                    <th>Position</th>
-                                    <th>Rarity</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-players-list">
-                                <!-- Player rows will be populated dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+<div class="card">
 
-                <!-- Packs Section -->
-                <div id="admin-packs" class="admin-section">
-                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">PACK MANAGEMENT</h2>
-                    <div id="admin-packs-table">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Name</th>
-                                    <th>Cost</th>
-                                    <th>Items</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-packs-list">
-                                <!-- Pack rows will be populated dynamically -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+<h3>💰 Savings</h3>
 
-                <!-- Settings Section -->
-                <div id="admin-settings" class="admin-section">
-                    <h2 style="font-family: 'Oswald', sans-serif; color: var(--fc-neon); margin-bottom: 1.5rem;">SETTINGS</h2>
-                    <div class="dash-card" style="padding: 1.5rem;">
-                        <h3>AI Settings</h3>
-                        <div class="form-group mt-4">
-                            <label>AI Market Activity</label>
-                            <select id="admin-ai-activity" class="filter-select">
-                                <option value="enabled">Enabled</option>
-                                <option value="disabled">Disabled</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>AI Listing Interval (minutes)</label>
-                            <input type="number" id="admin-ai-interval" class="search-input" value="5" min="1" max="60">
-                        </div>
-                        <button id="admin-save-ai-btn" class="btn btn-primary">Save AI Settings</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
+<div class="money" id="savings">40</div>
 
-    <!-- ==========================================================================
-       SCRIPTS
-       ========================================================================== -->
-    <script type="module" src="app.js"></script>
+SAR
+
+</div>
+
+
+<div class="card">
+
+<h3>🎮 PS</h3>
+
+<div class="money" id="ps">15</div>
+
+SAR
+
+</div>
+
+
+</div>
+
+</div>
+
+
+
+<div class="glass">
+
+
+<h2>Add Purchase</h2>
+
+
+<input id="item" placeholder="What did you buy?">
+
+
+<input id="cost" type="number" placeholder="Cost SAR">
+
+
+<select id="type">
+
+<option value="hangout">
+🍔 Hangout
+</option>
+
+<option value="savings">
+💰 Savings
+</option>
+
+<option value="ps">
+🎮 PlayStation
+</option>
+
+</select>
+
+
+<button onclick="addPurchase()">
+Add Purchase
+</button>
+
+
+</div>
+
+
+
+<div class="glass">
+
+
+<h2>History</h2>
+
+
+<div id="history"></div>
+
+
+</div>
+
+
+</div>
+
+
+
+
+
+<script type="module">
+
+
+import { initializeApp } 
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+
+import { getDatabase, ref, set, onValue }
+from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+
+
+
+// YOUR FIREBASE CONFIG
+
+const firebaseConfig = {
+
+apiKey: "AIzaSyCugS0qHKstXGZArd5vEBzm-DaLZAIDugo",
+
+authDomain: "money-e560a.firebaseapp.com",
+
+databaseURL: "https://money-e560a-default-rtdb.firebaseio.com",
+
+projectId: "money-e560a",
+
+storageBucket: "money-e560a.firebasestorage.app",
+
+messagingSenderId: "477551627159",
+
+appId: "1:477551627159:web:b19f853905331f71ee92d2",
+
+measurementId: "G-YYQD2E5J7J"
+
+};
+
+
+
+const app = initializeApp(firebaseConfig);
+
+const db = getDatabase(app);
+
+
+
+let money={
+
+hangout:65,
+
+savings:40,
+
+ps:15,
+
+history:[]
+
+};
+
+
+
+const user="zezo";
+
+
+
+function save(){
+
+set(ref(db,"users/"+user),money);
+
+}
+
+
+
+
+onValue(ref(db,"users/"+user),(snapshot)=>{
+
+
+if(snapshot.exists()){
+
+money=snapshot.val();
+
+}
+
+
+update();
+
+
+});
+
+
+
+
+window.addPurchase=function(){
+
+
+let name=document.getElementById("item").value;
+
+let cost=
+Number(document.getElementById("cost").value);
+
+
+let type=
+document.getElementById("type").value;
+
+
+
+if(!name || !cost)return;
+
+
+
+if(money[type]<cost){
+
+alert("Not enough money");
+
+return;
+
+}
+
+
+
+money[type]-=cost;
+
+
+
+money.history.unshift({
+
+name:name,
+
+cost:cost,
+
+type:type,
+
+date:new Date().toLocaleDateString()
+
+});
+
+
+save();
+
+
+
+document.getElementById("item").value="";
+
+document.getElementById("cost").value="";
+
+
+};
+
+
+
+function update(){
+
+
+document.getElementById("hangout").innerHTML=
+money.hangout;
+
+
+document.getElementById("savings").innerHTML=
+money.savings;
+
+
+document.getElementById("ps").innerHTML=
+money.ps;
+
+
+
+let h=document.getElementById("history");
+
+h.innerHTML="";
+
+
+money.history.forEach(p=>{
+
+
+h.innerHTML+=`
+
+<div class="purchase">
+
+<b>${p.name}</b>
+
+<br>
+
+${p.cost} SAR
+
+<br>
+
+<span class="small">
+${p.type} • ${p.date}
+</span>
+
+</div>
+
+`;
+
+});
+
+
+}
+
+
+
+if("serviceWorker" in navigator){
+
+navigator.serviceWorker.register("service-worker.js");
+
+}
+
+
+</script>
+
+
 </body>
+
 </html>
