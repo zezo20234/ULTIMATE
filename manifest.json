@@ -1,21 +1,21 @@
 {
-  "name": "Ultimate Team",
-  "short_name": "Ultimate Team",
-  "description": "Build your dream squad, open packs, and dominate the market",
-  "start_url": "./index.html",
+  "name": "Money Manager",
+  "short_name": "Money",
+  "description": "Personal allowance and spending tracker",
+  "start_url": "index.html",
   "display": "standalone",
-  "background_color": "#050505",
-  "theme_color": "#050505",
+  "background_color": "#f5f5f7",
+  "theme_color": "#111111",
   "orientation": "portrait",
-  "scope": "./",
+
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/5900/5900544.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/5900/5900544.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
